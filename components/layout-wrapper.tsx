@@ -24,7 +24,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
           <div className="hidden lg:block">
             <TopHeader />
           </div>
-          <main className="flex-1 overflow-auto bg-background pt-16 lg:pt-0">{children}</main>
+          <main className="flex-1 overflow-y-auto bg-background pt-16 lg:pt-0 overscroll-none">{children}</main>
         </div>
       </div>
     </RoleProvider>
