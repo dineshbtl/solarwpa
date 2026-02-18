@@ -1,18 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Bell, Search, Mail, UserCog } from "lucide-react"
+import { Bell, Search, Mail } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useRole } from "@/contexts/role-context"
-import type { Role } from "@/lib/rbac"
 import { roleLabel } from "@/lib/rbac"
 
-const ROLES: Role[] = ["surveyor", "manager", "engineer", "government", "admin"]
-
 export function TopHeader() {
-  const { role, setRole } = useRole()
+  const { role } = useRole()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -41,7 +38,8 @@ export function TopHeader() {
             <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full" />
           </Button>
 
-          {/* Role dropdown: render only after mount to avoid Radix ID hydration mismatch */}
+          {/* Role dropdown: DISABLED - role switching commented out */}
+          {/*
           {mounted ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -66,6 +64,7 @@ export function TopHeader() {
               <span className="hidden sm:inline">{roleLabel(role)}</span>
             </Button>
           )}
+          */}
 
           {/* User profile dropdown: render only after mount to avoid Radix ID hydration mismatch */}
           {mounted ? (
