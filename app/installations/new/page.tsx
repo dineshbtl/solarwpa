@@ -164,14 +164,14 @@ export default function NewInstallationPage() {
       return
     }
 
-    if (materials.length === 0) {
-      toast({
-        title: "Missing materials",
-        description: "Please add at least one material.",
-        variant: "destructive",
-      })
-      return
-    }
+    // if (materials.length === 0) {
+    //   toast({
+    //     title: "Missing materials",
+    //     description: "Please add at least one material.",
+    //     variant: "destructive",
+    //   })
+    //   return
+    // }
 
     if (photos.length === 0) {
       toast({

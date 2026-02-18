@@ -4,15 +4,18 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen, Users, Settings, HelpCircle, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useRole } from "@/contexts/role-context"
+import { getAccessibleRoutes } from "@/lib/route-permissions"
 
-const menuItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Surveys", href: "/surveys", icon: FileText },
-  { label: "Installations", href: "/installations", icon: Zap },
-  { label: "Inspections", href: "/inspections", icon: CheckCircle },
-  { label: "Projects", href: "/projects", icon: FolderOpen },
-  { label: "Users", href: "/users", icon: Users },
-]
+// Icon mapping for route permissions
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  LayoutDashboard,
+  FileText,
+  Zap,
+  CheckCircle,
+  FolderOpen,
+  Users,
+}
 
 const generalItems = [
   { label: "Settings", href: "/settings", icon: Settings },
@@ -22,6 +25,17 @@ const generalItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { role } = useRole()
+  
+  // Get accessible routes based on role
+  const accessibleRoutes = getAccessibleRoutes(role)
+  
+  // Map route configs to menu items
+  const menuItems = accessibleRoutes.map(route => ({
+    label: route.label,
+    href: route.href,
+    icon: iconMap[route.icon] || FolderOpen,
+  }))
 
   return (
     <aside className="hidden lg:flex w-64 bg-white border-r border-gray-200 min-h-screen sticky top-0 flex-col shadow-sm rounded-r-2xl">

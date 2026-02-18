@@ -3,20 +3,41 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen } from "lucide-react"
+import { Menu, X, LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen, Users, Settings, HelpCircle, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useRole } from "@/contexts/role-context"
+import { getAccessibleRoutes } from "@/lib/route-permissions"
 
-const menuItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Surveys", href: "/surveys", icon: FileText },
-  { label: "Installations", href: "/installations", icon: Zap },
-  { label: "Inspections", href: "/inspections", icon: CheckCircle },
-  { label: "Projects", href: "/projects", icon: FolderOpen },
+// Icon mapping for route permissions
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  LayoutDashboard,
+  FileText,
+  Zap,
+  CheckCircle,
+  FolderOpen,
+  Users,
+}
+
+const generalItems = [
+  { label: "Settings", href: "/settings", icon: Settings },
+  { label: "Help", href: "/help", icon: HelpCircle },
+  { label: "Logout", href: "/logout", icon: LogOut },
 ]
 
 export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
+  const { role } = useRole()
+  
+  // Get accessible routes based on role
+  const accessibleRoutes = getAccessibleRoutes(role)
+  
+  // Map route configs to menu items
+  const menuItems = accessibleRoutes.map(route => ({
+    label: route.label,
+    href: route.href,
+    icon: iconMap[route.icon] || FolderOpen,
+  }))
 
   return (
     <>
