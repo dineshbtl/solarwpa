@@ -81,3 +81,25 @@ export function getSupabaseBrowserClientIfConfigured(): ReturnType<typeof create
   if (!url || !key) return null
   return getSupabaseBrowserClient()
 }
+
+/** Admin client for server-side operations (requires SUPABASE_SERVICE_ROLE_KEY). */
+let adminClient: ReturnType<typeof createClient<Database>> | null = null
+
+export function getSupabaseAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  // Check both private and public (NEXT_PUBLIC_) versions of the key
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !serviceKey) {
+    throw new Error('Admin client requires SUPABASE_SERVICE_ROLE_KEY env var')
+  }
+  if (!adminClient) {
+    adminClient = createClient<Database>(url, serviceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
+  }
+  return adminClient
+}

@@ -18,7 +18,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { toast } from "@/hooks/use-toast"
 import type { Role } from "@/lib/rbac"
 import { roleLabel } from "@/lib/rbac"
-import { CreateUserSchema, createUser, seedUsers, type CreateUserInput } from "@/lib/store/users"
+import { CreateUserSchema, type CreateUserInput } from "@/lib/store/users"
+import { createUser, seedUsers } from "@/lib/data/users"
 
 export default function NewUserPage() {
   const router = useRouter()
@@ -47,19 +48,21 @@ export default function NewUserPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const onSubmit = (values: CreateUserInput) => {
+  const onSubmit = async (values: CreateUserInput) => {
     setIsSubmitting(true)
     try {
-      const user = createUser(values)
+      const user = await createUser(values)
       toast({
         title: "User created",
         description: `${user.name} (${roleLabel(user.role)}) was created successfully.`,
       })
       router.push("/users")
     } catch (e) {
+      console.error('[onSubmit] Error creating user:', e)
+      const errorMessage = e instanceof Error ? e.message : "Please try again."
       toast({
         title: "Could not create user",
-        description: e instanceof Error ? e.message : "Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {

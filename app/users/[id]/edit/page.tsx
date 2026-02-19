@@ -18,11 +18,13 @@ import type { Role } from "@/lib/rbac"
 import { roleLabel } from "@/lib/rbac"
 import {
   UpdateUserSchema,
+  type UpdateUserInput,
+} from "@/lib/store/users"
+import {
   getUserById,
   updateUser,
   seedUsers,
-  type UpdateUserInput,
-} from "@/lib/store/users"
+} from "@/lib/data/users"
 
 type FormValues = UpdateUserInput & { password?: string }
 
@@ -54,31 +56,32 @@ export default function EditUserPage() {
   useEffect(() => {
     seedUsers()
     if (!id) return
-    const u = getUserById(id)
-    if (!u) {
-      setNotFound(true)
+    getUserById(id).then((u) => {
+      if (!u) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
+      form.reset({
+        name: u.name,
+        email: u.email,
+        password: "",
+        role: u.role,
+        status: u.status ?? "active",
+        phone: u.phone ?? "",
+        aadharNo: u.aadharNo ?? "",
+        city: u.city ?? "",
+        state: u.state ?? "",
+        district: u.district ?? "",
+        fullAddress: u.fullAddress ?? "",
+      })
       setLoading(false)
-      return
-    }
-    form.reset({
-      name: u.name,
-      email: u.email,
-      password: "",
-      role: u.role,
-      status: u.status ?? "active",
-      phone: u.phone ?? "",
-      aadharNo: u.aadharNo ?? "",
-      city: u.city ?? "",
-      state: u.state ?? "",
-      district: u.district ?? "",
-      fullAddress: u.fullAddress ?? "",
     })
-    setLoading(false)
   }, [id, form])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const onSubmit = (values: FormValues) => {
+  const onSubmit = async (values: FormValues) => {
     if (!id) return
     setIsSubmitting(true)
     try {
@@ -97,7 +100,7 @@ export default function EditUserPage() {
       if (values.password && values.password.trim() !== "") {
         payload.password = values.password
       }
-      const updated = updateUser(id, payload)
+      const updated = await updateUser(id, payload)
       toast({
         title: "User updated",
         description: `${updated.name} (${roleLabel(updated.role)}) was updated.`,

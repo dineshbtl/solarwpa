@@ -4,7 +4,7 @@
 import type { Database } from '@/lib/supabase/database.types'
 import type { Role } from '@/lib/rbac'
 import type { User, CreateUserInput, UpdateUserInput } from '@/lib/store/users'
-import { getSupabaseBrowserClient } from '@/lib/supabase/client'
+import { getSupabaseBrowserClient, getSupabaseAdminClient } from '@/lib/supabase/client'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 
@@ -45,16 +45,59 @@ function nextUserId(existing: User[]): string {
   return `USR-${(max + 1).toString().padStart(3, '0')}`
 }
 
-/** Create profile only (auth user must be created separately via signUp). Used when admin creates user and we create profile with auth_user_id null until user signs in. */
+/** Create profile with auth user. Admin creates both profile and auth account so user can login immediately. */
 export async function createUserInSupabase(input: CreateUserInput): Promise<User> {
-  const supabase = getSupabaseBrowserClient()
+  const adminClient = getSupabaseAdminClient()
+  
+  // Check if user already exists in auth
+  const { data: existingUsers } = await adminClient.auth.admin.listUsers()
+  const existingAuthUser = existingUsers?.users.find(u => u.email?.toLowerCase() === input.email.toLowerCase())
+  
+  let authUserId: string
+  
+  if (existingAuthUser) {
+    // Use existing auth user
+    authUserId = existingAuthUser.id
+    console.log('[createUserInSupabase] Using existing auth user:', authUserId)
+  } else {
+    // Create new auth user using Admin API (bypasses email confirmation)
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
+      email: input.email,
+      password: input.password,
+      email_confirm: true, // Auto-confirm email so user can login immediately
+      user_metadata: { full_name: input.name },
+    })
+    
+    if (authError) {
+      console.error('[createUserInSupabase] Auth creation error:', authError)
+      throw new Error(`Failed to create auth account: ${authError.message}`)
+    }
+    
+    authUserId = authData.user?.id
+    if (!authUserId) {
+      throw new Error('Failed to get auth user ID')
+    }
+    console.log('[createUserInSupabase] Created new auth user:', authUserId)
+  }
+  
+  // Now create profile linked to auth user using admin client (bypasses RLS)
   const existing = await listUsersFromSupabase()
+  
+  // Check if profile already exists for this auth user
+  const existingProfile = existing.find(u => u.email.toLowerCase() === input.email.toLowerCase())
+  if (existingProfile) {
+    console.log('[createUserInSupabase] Profile already exists:', existingProfile)
+    return existingProfile
+  }
+  
   const id = nextUserId(existing)
-  const { data, error } = await supabase
+  console.log('[createUserInSupabase] Creating profile with id:', id, 'authUserId:', authUserId)
+  
+  const { data, error } = await adminClient
     .from('profiles')
     .insert({
       id,
-      auth_user_id: null,
+      auth_user_id: authUserId,
       name: input.name,
       email: input.email,
       role: input.role,
@@ -68,7 +111,10 @@ export async function createUserInSupabase(input: CreateUserInput): Promise<User
     })
     .select()
     .single()
-  if (error) throw error
+  if (error) {
+    console.error('[createUserInSupabase] Profile creation error:', error)
+    throw new Error(`Database error creating new user: ${error.message}`)
+  }
   return rowToUser(data)
 }
 
@@ -98,9 +144,31 @@ export async function updateUserRoleInSupabase(userId: string, role: Role): Prom
 }
 
 export async function deleteUserInSupabase(userId: string): Promise<void> {
+  // First get the profile to find auth_user_id
   const supabase = getSupabaseBrowserClient()
+  const { data: profile, error: fetchError } = await supabase
+    .from('profiles')
+    .select('auth_user_id')
+    .eq('id', userId)
+    .maybeSingle()
+  
+  if (fetchError) throw fetchError
+  
+  // Delete the profile
   const { error } = await supabase.from('profiles').delete().eq('id', userId)
   if (error) throw error
+  
+  // If there's an auth_user_id, delete the auth user too
+  const authUserId = (profile as { auth_user_id?: string } | null)?.auth_user_id
+  if (authUserId) {
+    try {
+      const adminClient = getSupabaseAdminClient()
+      await adminClient.auth.admin.deleteUser(authUserId)
+    } catch (e) {
+      console.error('[deleteUserInSupabase] Failed to delete auth user:', e)
+      // Profile is already deleted, so we don't throw
+    }
+  }
 }
 
 /** Get current user's profile by auth session (auth.uid() -> profiles.auth_user_id). */
