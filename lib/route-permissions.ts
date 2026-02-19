@@ -15,7 +15,7 @@ export interface RouteConfig {
 
 export const ROUTE_CONFIG: RouteConfig[] = [
   // Core workflow routes - accessible to specific roles
-  { href: '/surveys', label: 'Surveys', icon: 'FileText', allowedRoles: ['admin', 'manager', 'surveyor'] },
+  { href: '/surveys', label: 'Surveys', icon: 'FileText', allowedRoles: ['admin', 'manager', 'surveyor', 'engineer'] },
   { href: '/installations', label: 'Installations', icon: 'Zap', allowedRoles: ['admin', 'manager', 'engineer'] },
   { href: '/inspections', label: 'Inspections', icon: 'CheckCircle', allowedRoles: ['admin', 'manager', 'government'] },
   { href: '/projects', label: 'Projects', icon: 'FolderOpen', allowedRoles: ['admin', 'manager'] },

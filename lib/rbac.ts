@@ -5,6 +5,7 @@ export type Permission =
   | 'manage_projects'
   | 'assign_staff'
   | 'create_surveys'
+  | 'read_surveys'
   | 'create_installations'
   | 'approve_surveys'
   | 'approve_installations'
@@ -36,7 +37,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'approve_installations',
     'perform_inspections',
   ],
-  engineer: ['create_installations'],
+  engineer: ['create_installations', 'read_surveys'],
   surveyor: ['create_surveys'],
   government: ['perform_inspections'],
 }
