@@ -89,17 +89,17 @@ export default function UsersPage() {
         </Link>
       </div>
 
-      <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-xl">
+      <Card className="mb-6 bg-card border-border shadow-sm rounded-xl">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 sm:flex-row">
             <Input
               placeholder="Search by name, email, or ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border-gray-200 bg-background rounded-lg"
+              className="border-border bg-background rounded-lg"
             />
             <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as Role | "all")}>
-              <SelectTrigger className="w-full border-gray-200 bg-background sm:w-[220px] rounded-lg">
+              <SelectTrigger className="w-full border-border bg-background sm:w-[220px] rounded-lg">
                 <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
               <SelectContent>
@@ -112,7 +112,7 @@ export default function UsersPage() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as UserStatus | "all")}>
-              <SelectTrigger className="w-full border-gray-200 bg-background sm:w-[180px] rounded-lg">
+              <SelectTrigger className="w-full border-border bg-background sm:w-[180px] rounded-lg">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -125,7 +125,7 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      <Card className="bg-white border-gray-200 shadow-sm rounded-xl">
+      <Card className="bg-card border-border shadow-sm rounded-xl">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">All users ({users.length})</CardTitle>
         </CardHeader>
@@ -171,8 +171,8 @@ export default function UsersPage() {
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                         (u.status ?? "active") === "active"
-                          ? "bg-green-50 text-green-700"
-                          : "bg-gray-100 text-gray-600"
+                          ? "bg-muted/50 text-green-700"
+                          : "bg-muted text-muted-foreground600"
                       }`}
                     >
                       <CircleDot className="mr-1 h-3 w-3" />
@@ -186,7 +186,7 @@ export default function UsersPage() {
                         .map((p) => (
                           <span
                             key={p}
-                            className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
+                            className="inline-flex items-center rounded-full bg-muted/50 px-2.5 py-1 text-xs font-medium text-green-700"
                           >
                             <ShieldCheck className="mr-1 h-3.5 w-3.5" />
                             {p}
@@ -202,12 +202,12 @@ export default function UsersPage() {
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Link href={`/users/${u.id}`}>
-                        <Button variant="ghost" size="sm" className="text-solar-dark hover:bg-solar-beige">
+                        <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent">
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
                       <Link href={`/users/${u.id}/edit`}>
-                        <Button variant="ghost" size="sm" className="text-solar-dark hover:bg-solar-beige">
+                        <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent">
                           <Pencil className="h-4 w-4" />
                         </Button>
                       </Link>
@@ -215,7 +215,7 @@ export default function UsersPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => onDelete(u.id)}
-                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

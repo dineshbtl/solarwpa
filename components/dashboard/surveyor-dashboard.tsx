@@ -55,7 +55,7 @@ export function SurveyorDashboard() {
           {stats.map((stat) => {
             const Icon = stat.icon
             return (
-              <Card key={stat.label} className="bg-white border-neutral-200">
+              <Card key={stat.label} className="bg-white border-border">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -73,7 +73,7 @@ export function SurveyorDashboard() {
         </div>
 
         {/* Quick Actions */}
-        <Card className="bg-white border-neutral-200 mb-8">
+        <Card className="bg-white border-border mb-8">
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
@@ -96,7 +96,7 @@ export function SurveyorDashboard() {
         </Card>
 
         {/* Pending Tasks */}
-        <Card className="bg-white border-neutral-200">
+        <Card className="bg-white border-border">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Today's Tasks</CardTitle>
@@ -108,7 +108,7 @@ export function SurveyorDashboard() {
               {pendingTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-neutral-200 hover:border-neutral-300 transition-colors"
+                  className="flex items-center justify-between p-4 rounded-lg border border-border hover:border-neutral-300 transition-colors"
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">

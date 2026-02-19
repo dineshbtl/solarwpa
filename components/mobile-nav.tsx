@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen, Users, Settings, HelpCircle, LogOut } from "lucide-react"
+import { Menu, X, LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen, Users, Settings, HelpCircle, LogOut, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRole } from "@/contexts/role-context"
 import { getAccessibleRoutes } from "@/lib/route-permissions"
@@ -19,6 +19,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 }
 
 const generalItems = [
+  { label: "Profile", href: "/profile", icon: User },
   { label: "Settings", href: "/settings", icon: Settings },
   { label: "Help", href: "/help", icon: HelpCircle },
   { label: "Logout", href: "/logout", icon: LogOut },
@@ -44,7 +45,7 @@ export function MobileNav() {
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white rounded-lg shadow-lg border border-gray-200"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-background rounded-lg shadow-lg border border-border"
       >
         {isOpen ? <X className="w-6 h-6 text-gray-700" /> : <Menu className="w-6 h-6 text-gray-700" />}
       </button>
@@ -55,11 +56,11 @@ export function MobileNav() {
       {/* Mobile Sidebar */}
       <aside
         className={cn(
-          "lg:hidden fixed top-0 left-0 h-full w-72 bg-white shadow-2xl z-40 transform transition-transform duration-300",
+          "lg:hidden fixed top-0 left-0 h-full w-72 bg-background shadow-2xl z-40 transform transition-transform duration-300",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="p-6 border-b border-gray-200 mt-16">
+        <div className="p-6 border-b border-border mt-16">
           <Link href="/dashboard" className="flex items-center gap-3" onClick={() => setIsOpen(false)}>
             <div className="w-10 h-10 bg-gradient-primary-button rounded-xl flex items-center justify-center text-white font-bold">
               S
@@ -70,7 +71,7 @@ export function MobileNav() {
 
         <nav className="p-4">
           <div className="space-y-2">
-            <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">MENU</p>
+            <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">MENU</p>
             {menuItems.map((item) => {
               const Icon = item.icon
               const isActive = pathname?.startsWith(item.href)
@@ -79,7 +80,7 @@ export function MobileNav() {
                   <button
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-smooth relative",
-                      isActive ? "text-primary bg-green-50" : "text-gray-600 hover:text-foreground hover:bg-gray-50",
+                      isActive ? "text-primary bg-green-50" : "text-muted-foreground hover:text-foreground hover:bg-muted",
                     )}
                   >
                     {isActive && (

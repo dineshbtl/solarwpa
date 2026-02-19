@@ -58,9 +58,9 @@ export default function ProfilePage() {
       case "surveyor":
         return "bg-yellow-100 text-yellow-800"
       case "government":
-        return "bg-gray-100 text-gray-800"
+        return "bg-muted text-muted-foreground800"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-muted text-muted-foreground800"
     }
   }
 
@@ -114,7 +114,7 @@ export default function ProfilePage() {
 
         <div className="space-y-6">
           {/* Profile Header Card */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader className="pb-2">
               <div className="flex flex-col sm:flex-row items-center gap-6">
                 <Avatar className="h-24 w-24 border-4 border-green-100">
@@ -142,7 +142,7 @@ export default function ProfilePage() {
           </Card>
 
           {/* Personal Information Card */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <UserIcon className="h-5 w-5 text-primary" />
@@ -192,7 +192,7 @@ export default function ProfilePage() {
 
           {/* Additional Details Card */}
           {(profile.aadharNo || profile.fullAddress) && (
-            <Card className="border-border bg-white shadow-sm">
+            <Card className="border-border bg-card shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg font-semibold text-foreground">
                   Additional Details
@@ -226,7 +226,7 @@ export default function ProfilePage() {
           )}
 
           {/* Account Info Card */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground">
                 Account Information

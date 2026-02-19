@@ -283,7 +283,7 @@ export default function EditSurveyPage() {
           {file && file.type.startsWith("image/") && (
             <ImagePreview file={file} className="mb-3 h-24 max-w-[200px] rounded-lg border border-solar object-cover" />
           )}
-          <p className="text-sm font-medium text-solar-dark">{uploadLabels[k]}</p>
+          <p className="text-sm font-medium text-foreground">{uploadLabels[k]}</p>
           {helper && <p className="mt-1 text-xs text-muted-foreground">{helper}</p>}
           {file ? (
             <p className="mt-2 text-xs text-green-700">
@@ -337,7 +337,7 @@ export default function EditSurveyPage() {
             <Button
               type="button"
               variant="ghost"
-              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => removeExistingUpload(k)}
             >
               Remove
@@ -402,7 +402,7 @@ export default function EditSurveyPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white p-6 sm:p-8">
+      <div className="min-h-screen bg-background p-6 sm:p-8">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-5 w-16" />
           <Skeleton className="h-32 w-full rounded-lg" />
@@ -413,7 +413,7 @@ export default function EditSurveyPage() {
 
   if (error || !survey) {
     return (
-      <div className="min-h-screen bg-white p-6 sm:p-8">
+      <div className="min-h-screen bg-background p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Survey not found.</p>
         <div className="mt-4">
           <Link href="/surveys">
@@ -425,10 +425,10 @@ export default function EditSurveyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <Link href={`/surveys/${id}`}>
-          <Button variant="outline" className="mb-6 border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-gray-400">
+          <Button variant="outline" className="mb-6 border-gray-300 bg-white text-muted-foreground800 hover:bg-muted hover:border-gray-400">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Survey
           </Button>
@@ -439,7 +439,7 @@ export default function EditSurveyPage() {
           <CardHeader>
             <div className="flex items-start justify-between">
               <div>
-                <CardTitle className="text-2xl text-solar-dark">{survey.beneficiaryName}</CardTitle>
+                <CardTitle className="text-2xl text-foreground">{survey.beneficiaryName}</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">Survey ID: {survey.id}</p>
               </div>
               <span
@@ -464,12 +464,12 @@ export default function EditSurveyPage() {
             {/* 1. Beneficiary Details — same section as detail page */}
             <Card className="border-solar bg-solar-card shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg text-solar-dark">Beneficiary Details</CardTitle>
+                  <CardTitle className="text-lg text-foreground">Beneficiary Details</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-2">
-                    <p className="text-sm font-medium text-solar-dark">Surveyor (submitted by)</p>
-                    <p className="text-sm text-solar-dark">{currentUser?.name ?? "—"}</p>
+                    <p className="text-sm font-medium text-foreground">Surveyor (submitted by)</p>
+                    <p className="text-sm text-foreground">{currentUser?.name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">The logged-in user is recorded as the submitter when you save.</p>
                   </div>
 
@@ -589,12 +589,12 @@ export default function EditSurveyPage() {
               {/* Site location fields */}
               <Card className="border-solar bg-solar-card shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg text-solar-dark">Site Location</CardTitle>
+                  <CardTitle className="text-lg text-foreground">Site Location</CardTitle>
                   <p className="text-sm text-muted-foreground">Optional: select a project to fill district, pin code, state, city and address.</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-solar-dark">Fill from project (optional)</label>
+                    <label className="text-sm font-medium text-foreground">Fill from project (optional)</label>
                     <Select value="__none__" onValueChange={handleProjectSelectForLocation}>
                       <SelectTrigger className="border-solar bg-background max-w-sm">
                         <SelectValue placeholder="Select project to fill site location" />
@@ -805,7 +805,7 @@ export default function EditSurveyPage() {
               {/* Plant & roof details */}
               <Card className="border-solar bg-solar-card shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg text-solar-dark">Plant & Roof Details</CardTitle>
+                  <CardTitle className="text-lg text-foreground">Plant & Roof Details</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
@@ -920,7 +920,7 @@ export default function EditSurveyPage() {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-solar-dark">Meter AC Cable (m)</label>
+                      <label className="text-sm font-medium text-foreground">Meter AC Cable (m)</label>
                       <Input
                         className="border-solar bg-background"
                         type="number"
@@ -936,7 +936,7 @@ export default function EditSurveyPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-solar-dark">Meter DC Cable (m)</label>
+                      <label className="text-sm font-medium text-foreground">Meter DC Cable (m)</label>
                       <Input
                         className="border-solar bg-background"
                         type="number"
@@ -953,7 +953,7 @@ export default function EditSurveyPage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-solar-dark">Slab thickness (inches)</label>
+                    <label className="text-sm font-medium text-foreground">Slab thickness (inches)</label>
                     <Input
                       className="border-solar bg-background max-w-xs"
                       type="number"
@@ -974,7 +974,7 @@ export default function EditSurveyPage() {
               {/* Bank details */}
               <Card className="border-solar bg-solar-card shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg text-solar-dark">Bank Details (Optional)</CardTitle>
+                  <CardTitle className="text-lg text-foreground">Bank Details (Optional)</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
@@ -1040,7 +1040,7 @@ export default function EditSurveyPage() {
               {/* Remarks (Optional) */}
               <Card className="border-solar bg-solar-card shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg text-solar-dark">Remarks</CardTitle>
+                  <CardTitle className="text-lg text-foreground">Remarks</CardTitle>
                   <p className="text-sm text-muted-foreground">Any additional notes or observations (optional)</p>
                 </CardHeader>
                 <CardContent>
@@ -1067,7 +1067,7 @@ export default function EditSurveyPage() {
               {/* Site details (auto from GPRS Cam) */}
               <Card className="border-solar bg-solar-card shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg text-solar-dark">Site Details (GPRS Cam)</CardTitle>
+                  <CardTitle className="text-lg text-foreground">Site Details (GPRS Cam)</CardTitle>
                   <p className="text-sm text-muted-foreground">Capture location to auto-fill site details</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1087,7 +1087,7 @@ export default function EditSurveyPage() {
                       type="button"
                       onClick={handleCaptureLocation}
                       disabled={isCapturingLocation}
-                      className="bg-solar-yellow text-solar-dark hover:bg-solar-yellow/90"
+                      className="bg-solar-yellow text-foreground hover:bg-solar-yellow/90"
                     >
                       <MapPin className="mr-2 h-4 w-4" />
                       {isCapturingLocation ? "Capturing..." : "Capture Location"}
@@ -1109,7 +1109,7 @@ export default function EditSurveyPage() {
               {/* Uploads (optional for now) */}
               <Card className="border-solar bg-solar-card shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg text-solar-dark">Uploads (Optional)</CardTitle>
+                  <CardTitle className="text-lg text-foreground">Uploads (Optional)</CardTitle>
                   <p className="text-sm text-muted-foreground">Aadhar, PAN, Bank Proof, E-Bill, Beneficiary Photo, Site Layout, Site Photos</p>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1131,7 +1131,7 @@ export default function EditSurveyPage() {
               </Card>
 
               {/* Submit — same style as installation form */}
-              <div className="rounded-xl border-2 border-green-200 bg-green-50/80 p-5">
+              <div className="rounded-xl border-2 border-green-200 bg-muted/50/80 p-5">
                 <p className="mb-4 text-sm font-medium text-green-800">Ready? Save your changes</p>
                 <div className="flex flex-wrap gap-4">
                   <Button
@@ -1139,7 +1139,7 @@ export default function EditSurveyPage() {
                     variant="outline"
                     size="lg"
                     onClick={() => router.push(`/surveys/${id}`)}
-                    className="border-solar text-solar-dark"
+                    className="border-solar text-foreground"
                   >
                     Cancel
                   </Button>

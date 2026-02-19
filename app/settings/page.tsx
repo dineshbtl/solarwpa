@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { Loader2, Settings, Palette, Bell, Shield, Database, Globe, Clock, Info } from "lucide-react"
 import { getCurrentProfileFromSupabase } from "@/lib/supabase/users"
+import { useTheme } from "next-themes"
 import type { User } from "@/lib/store/users"
 
 // Application settings configuration
@@ -27,6 +29,8 @@ const appSettings = {
 export default function SettingsPage() {
   const [profile, setProfile] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const { theme, setTheme } = useTheme()
+  const [darkModeEnabled, setDarkModeEnabled] = useState(false)
 
   useEffect(() => {
     async function loadProfile() {
@@ -42,6 +46,15 @@ export default function SettingsPage() {
     loadProfile()
   }, [])
 
+  useEffect(() => {
+    setDarkModeEnabled(theme === "dark")
+  }, [theme])
+
+  const handleDarkModeToggle = (enabled: boolean) => {
+    setDarkModeEnabled(enabled)
+    setTheme(enabled ? "dark" : "light")
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
@@ -54,7 +67,7 @@ export default function SettingsPage() {
 
         <div className="space-y-6">
           {/* User Settings Card */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary" />
@@ -88,7 +101,7 @@ export default function SettingsPage() {
           </Card>
 
           {/* Application Info Card */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Info className="h-5 w-5 text-primary" />
@@ -134,7 +147,7 @@ export default function SettingsPage() {
           </Card>
 
           {/* Feature Settings Card */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Settings className="h-5 w-5 text-primary" />
@@ -151,9 +164,7 @@ export default function SettingsPage() {
                       <p className="text-sm text-muted-foreground">Use dark theme across the application</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className="bg-gray-100 text-gray-600">
-                    {appSettings.features.darkMode ? "Enabled" : "Disabled"}
-                  </Badge>
+                  <Switch checked={darkModeEnabled} onCheckedChange={handleDarkModeToggle} />
                 </div>
 
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
@@ -186,7 +197,7 @@ export default function SettingsPage() {
           </Card>
 
           {/* System Limits Card */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <Database className="h-5 w-5 text-primary" />

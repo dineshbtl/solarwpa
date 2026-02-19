@@ -19,7 +19,7 @@ export function Navbar() {
   const pathname = usePathname()
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-solar bg-gradient-to-r from-white to-yellow-50 backdrop-blur-sm">
+    <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur-sm">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-8">
           <Link href="/dashboard" className="flex items-center">
@@ -35,8 +35,8 @@ export function Navbar() {
                     variant={isActive ? "default" : "ghost"}
                     className={
                       isActive
-                        ? "bg-solar-grey text-white hover:bg-solar-grey/90"
-                        : "text-solar-dark hover:bg-yellow-100"
+                        ? "bg-primary text-white hover:bg-primary/90"
+                        : "text-foreground hover:bg-accent"
                     }
                   >
                     {item.name}
@@ -48,17 +48,17 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="text-solar-dark hover:bg-yellow-100">
+          <Button variant="ghost" size="icon" className="text-foreground hover:bg-accent">
             <Bell className="h-5 w-5" />
           </Button>
 
-          <Button variant="ghost" size="icon" className="text-solar-dark hover:bg-yellow-100">
+          <Button variant="ghost" size="icon" className="text-foreground hover:bg-accent">
             <Settings className="h-5 w-5" />
           </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-solar-dark hover:bg-yellow-100">
+              <Button variant="ghost" size="icon" className="text-foreground hover:bg-accent">
                 <User className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>

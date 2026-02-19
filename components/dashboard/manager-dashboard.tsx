@@ -49,7 +49,7 @@ export function ManagerDashboard() {
           {stats.map((stat) => {
             const Icon = stat.icon
             return (
-              <Card key={stat.label} className="bg-white border-neutral-200">
+              <Card key={stat.label} className="bg-white border-border">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -67,7 +67,7 @@ export function ManagerDashboard() {
         </div>
 
         {/* Approval Queue */}
-        <Card className="bg-white border-neutral-200 mb-8">
+        <Card className="bg-white border-border mb-8">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Approval Queue</CardTitle>
@@ -83,7 +83,7 @@ export function ManagerDashboard() {
               {approvalQueue.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-neutral-200"
+                  className="flex items-center justify-between p-4 rounded-lg border border-border"
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
@@ -116,7 +116,7 @@ export function ManagerDashboard() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="bg-white border-neutral-200">
+          <Card className="bg-white border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-green-600" />
@@ -156,7 +156,7 @@ export function ManagerDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white border-neutral-200">
+          <Card className="bg-white border-border">
             <CardHeader>
               <CardTitle>Recent Activity</CardTitle>
             </CardHeader>

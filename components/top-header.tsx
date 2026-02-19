@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Bell, Search, Mail } from "lucide-react"
+import { Bell, Search, Mail, Sun, Moon } from "lucide-react"
+import { useTheme } from "next-themes"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -15,6 +16,7 @@ export function TopHeader() {
   const { role } = useRole()
   const [mounted, setMounted] = useState(false)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const { theme, setTheme } = useTheme()
 
   useEffect(() => {
     setMounted(true)
@@ -41,27 +43,39 @@ export function TopHeader() {
       .slice(0, 2)
   }
 
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark")
+  }
+
   return (
-    <header className="sticky top-0 z-40 bg-gradient-topbar border-b border-border">
+    <header className="sticky top-0 z-40 bg-background border-b border-border">
       <div className="flex h-16 items-center justify-between px-8">
         {/* Search */}
         <div className="flex-1 max-w-md">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search task" className="pl-9 bg-white border-border text-sm rounded-xl" />
+            <Input placeholder="Search task" className="pl-9 bg-background border-border text-sm rounded-xl" />
           </div>
         </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-6 ml-auto">
-          <Button variant="ghost" size="icon" className="relative text-foreground hover:bg-transparent">
+          {/* <Button variant="ghost" size="icon" className="relative text-foreground hover:bg-transparent">
             <Mail className="w-5 h-5" />
+          </Button> */}
+
+          <Button variant="ghost" size="icon" className="relative text-foreground hover:bg-transparent" onClick={toggleTheme}>
+            {mounted && theme === "dark" ? (
+              <Moon className="w-5 h-5" />
+            ) : (
+              <Sun className="w-5 h-5" />
+            )}
           </Button>
 
-          <Button variant="ghost" size="icon" className="relative text-foreground hover:bg-transparent">
+          {/* <Button variant="ghost" size="icon" className="relative text-foreground hover:bg-transparent">
             <Bell className="w-5 h-5" />
             <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full" />
-          </Button>
+          </Button> */}
 
           {/* Role dropdown: DISABLED - role switching commented out */}
           {/*

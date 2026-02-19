@@ -88,7 +88,7 @@ export default function InspectionsPage() {
       </div>
 
       {/* Filters */}
-      <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-xl">
+      <Card className="mb-6 bg-card border-border shadow-sm rounded-xl">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4 sm:flex-row">
             <div className="relative flex-1">
@@ -97,11 +97,11 @@ export default function InspectionsPage() {
                 placeholder="Search by customer name, address, or ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="border-gray-200 bg-background pl-9 rounded-lg"
+                className="border-border bg-background pl-9 rounded-lg"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full border-gray-200 bg-background sm:w-[200px] rounded-lg">
+              <SelectTrigger className="w-full border-border bg-background sm:w-[200px] rounded-lg">
                 <Filter className="mr-2 h-4 w-4" />
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -117,7 +117,7 @@ export default function InspectionsPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-gray-200 bg-white shadow-sm rounded-xl">
+      <Card className="border-border bg-card shadow-sm rounded-xl">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -157,7 +157,7 @@ export default function InspectionsPage() {
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {pageItems.map((inspection: any) => (
                   <Link key={`${inspection.kind}-${inspection.id}`} href={`/inspections/${inspection.id}`}>
-                    <Card className="h-full border-gray-200 bg-white shadow-sm transition-all hover:shadow-lg rounded-xl">
+                    <Card className="h-full border-border bg-card shadow-sm transition-all hover:shadow-lg rounded-xl">
                       <CardHeader>
                         <div className="flex items-start justify-between">
                           <div className="rounded-lg bg-gradient-light-green p-2">
@@ -195,11 +195,11 @@ export default function InspectionsPage() {
                           </div>
                           <div className="space-y-2 pt-2">
                             <div className="flex items-center gap-2">
-                              <CheckCircle className={`h-4 w-4 ${inspection.managerApproved ? "text-green-600" : "text-gray-300"}`} />
+                              <CheckCircle className={`h-4 w-4 ${inspection.managerApproved ? "text-green-600" : "text-muted-foreground300"}`} />
                               <span className="text-xs text-muted-foreground">Manager Approval</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <CheckCircle className={`h-4 w-4 ${inspection.governmentApproved ? "text-green-600" : "text-gray-300"}`} />
+                              <CheckCircle className={`h-4 w-4 ${inspection.governmentApproved ? "text-green-600" : "text-muted-foreground300"}`} />
                               <span className="text-xs text-muted-foreground">Government Inspection</span>
                             </div>
                           </div>

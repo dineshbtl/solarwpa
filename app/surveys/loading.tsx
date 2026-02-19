@@ -9,13 +9,13 @@ export default function SurveysLoading() {
           <Skeleton className="mt-1 h-3 w-36" />
         </div>
       </div>
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="mb-4 rounded-xl border border-border bg-white p-4">
         <div className="flex flex-col gap-2 sm:flex-row">
           <Skeleton className="h-5 flex-1" />
           <Skeleton className="h-5 w-[100px]" />
         </div>
       </div>
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-white p-4">
         <div className="mb-2 flex justify-between">
           <Skeleton className="h-3 w-20" />
           <div className="flex gap-1">

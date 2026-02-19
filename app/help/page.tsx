@@ -137,7 +137,7 @@ export default function HelpPage() {
         <div className="space-y-8">
           {/* Quick Links Section */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="border-border bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+            <Card className="border-border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-gradient-dark-green p-2">
@@ -151,7 +151,7 @@ export default function HelpPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-border bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+            <Card className="border-border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-gradient-dark-green p-2">
@@ -165,7 +165,7 @@ export default function HelpPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-border bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+            <Card className="border-border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-gradient-dark-green p-2">
@@ -179,7 +179,7 @@ export default function HelpPage() {
               </CardContent>
             </Card>
 
-            <Card className="border-border bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+            <Card className="border-border bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="rounded-lg bg-gradient-dark-green p-2">
@@ -195,7 +195,7 @@ export default function HelpPage() {
           </div>
 
           {/* FAQ Section */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <HelpCircle className="h-5 w-5 text-primary" />
@@ -232,7 +232,7 @@ export default function HelpPage() {
           </Card>
 
           {/* Contact Support Section */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 text-primary" />
@@ -265,7 +265,7 @@ export default function HelpPage() {
           </Card>
 
           {/* Documentation Section */}
-          <Card className="border-border bg-white shadow-sm">
+          <Card className="border-border bg-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
                 <BookOpen className="h-5 w-5 text-primary" />
@@ -304,19 +304,19 @@ export default function HelpPage() {
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="p-4 rounded-lg bg-white/50">
+                <div className="p-4 rounded-lg bg-background/50">
                   <p className="text-sm text-muted-foreground">Version</p>
                   <p className="font-medium text-foreground">1.0.0</p>
                 </div>
-                {/* <div className="p-4 rounded-lg bg-white/50">
+                {/* <div className="p-4 rounded-lg bg-background/50">
                   <p className="text-sm text-muted-foreground">Build</p>
                   <p className="font-medium text-foreground">Production</p>
                 </div> */}
-                {/* <div className="p-4 rounded-lg bg-white/50">
+                {/* <div className="p-4 rounded-lg bg-background/50">
                   <p className="text-sm text-muted-foreground">Platform</p>
                   <p className="font-medium text-foreground">Next.js + Supabase</p>
                 </div> */}
-                <div className="p-4 rounded-lg bg-white/50">
+                <div className="p-4 rounded-lg bg-background/50">
                   <p className="text-sm text-muted-foreground">License</p>
                   <p className="font-medium text-foreground">Enterprise</p>
                 </div>

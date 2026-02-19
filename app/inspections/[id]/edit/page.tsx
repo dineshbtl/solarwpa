@@ -107,13 +107,13 @@ export default function EditInspectionPage() {
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <Link href={`/inspections/${id}`}>
-          <Button variant="ghost" className="mb-6 text-solar-dark hover:bg-solar-beige">
+          <Button variant="ghost" className="mb-6 text-foreground hover:bg-accent">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Inspection
           </Button>
         </Link>
 
-        <Card className="border-border bg-white shadow-sm rounded-xl">
+        <Card className="border-border bg-card shadow-sm rounded-xl">
           <CardHeader>
             <CardTitle className="text-2xl text-foreground">Edit Inspection</CardTitle>
             <p className="text-sm text-muted-foreground">Update inspection details and inspector assignment.</p>
@@ -121,7 +121,7 @@ export default function EditInspectionPage() {
           <CardContent className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <Label className="text-solar-dark">Customer Name</Label>
+                <Label className="text-foreground">Customer Name</Label>
                 <Input
                   className="mt-2 border-solar bg-background"
                   value={customerName}
@@ -130,7 +130,7 @@ export default function EditInspectionPage() {
                 />
               </div>
               <div>
-                <Label className="text-solar-dark">Inspector (Gov role)</Label>
+                <Label className="text-foreground">Inspector (Gov role)</Label>
                 <Select value={inspectorId} onValueChange={setInspectorId}>
                   <SelectTrigger className="mt-2 border-solar bg-background">
                     <SelectValue placeholder="Unassigned" />
@@ -149,7 +149,7 @@ export default function EditInspectionPage() {
             </div>
 
             <div>
-              <Label className="text-solar-dark">Address</Label>
+              <Label className="text-foreground">Address</Label>
               <Input
                 className="mt-2 border-solar bg-background"
                 value={address}

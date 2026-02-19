@@ -84,7 +84,7 @@ export default function SignUpPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-white/95 shadow-2xl rounded-2xl overflow-hidden">
+      <Card className="w-full max-w-md bg-background/95 shadow-2xl rounded-2xl overflow-hidden">
         <div className="bg-gradient-dark-green p-6 text-center">
           <h1 className="text-2xl font-bold text-white">Create account</h1>
           <p className="text-green-100 text-sm">SolarEPC</p>

@@ -178,9 +178,9 @@ export default function LoginPage() {
       </div>
 
       {/* Login Card */}
-      <Card className="w-full max-w-md bg-white/95 backdrop-blur-sm shadow-2xl rounded-2xl overflow-hidden relative z-10">
+      <Card className="w-full max-w-md bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl overflow-hidden relative z-10">
         <div className="bg-gradient-dark-green p-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-background/20 rounded-full mb-4">
             <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
@@ -196,7 +196,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+            <Label htmlFor="email" className="text-sm font-medium text-muted-foreground700">
               Email Address
             </Label>
             <Input
@@ -211,7 +211,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+            <Label htmlFor="password" className="text-sm font-medium text-muted-foreground700">
               Password
             </Label>
             <div className="relative">
@@ -230,7 +230,7 @@ export default function LoginPage() {
                 size="icon"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground600 hover:text-muted-foreground900"
               >
                 {showPassword ? <EyeOff /> : <Eye />}
               </Button>
@@ -245,7 +245,7 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Sign In"}
           </Button>
 
-          <div className="text-center text-sm text-gray-600 space-y-1">
+          <div className="text-center text-sm text-muted-foreground600 space-y-1">
             {supabaseConfigured ? (
               <p>
                 No account? <Link href="/signup" className="text-green-600 hover:underline font-medium">Sign up</Link>

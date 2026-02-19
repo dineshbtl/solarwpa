@@ -39,8 +39,8 @@ export function Sidebar() {
   }))
 
   return (
-    <aside className="hidden lg:flex w-64 bg-white border-r border-gray-200 min-h-screen sticky top-0 flex-col shadow-sm rounded-r-2xl">
-      <div className="p-6 border-b border-gray-200">
+    <aside className="hidden lg:flex w-64 bg-background border-r border-border min-h-screen sticky top-0 flex-col shadow-sm rounded-r-2xl">
+      <div className="p-6 border-b border-border">
         <Link href="/dashboard" className="flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-primary-button rounded-lg flex items-center justify-center text-white font-bold text-sm">
             S
@@ -52,7 +52,7 @@ export function Sidebar() {
       {/* Navigation Menu */}
       <nav className="flex-1 px-3 py-6">
         <div className="space-y-1">
-          <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">MENU</p>
+          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">MENU</p>
           {menuItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname?.startsWith(item.href)
@@ -61,7 +61,7 @@ export function Sidebar() {
                 <button
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-smooth relative",
-                    isActive ? "text-primary bg-green-50" : "text-gray-600 hover:text-foreground hover:bg-gray-50",
+                    isActive ? "text-primary bg-green-50" : "text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                 >
                   {isActive && (
@@ -76,13 +76,13 @@ export function Sidebar() {
         </div>
 
         {/* General Section */}
-        <div className="space-y-1 mt-8 pt-6 border-t border-gray-200">
-          <p className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">GENERAL</p>
+        <div className="space-y-1 mt-8 pt-6 border-t border-border">
+          <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">GENERAL</p>
           {generalItems.map((item) => {
             const Icon = item.icon
             return (
               <Link key={item.href} href={item.href}>
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:text-foreground hover:bg-gray-50 transition-smooth">
+                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-foreground hover:text-foreground hover:bg-muted transition-smooth">
                   <Icon className="w-4 h-4" />
                   <span>{item.label}</span>
                 </button>

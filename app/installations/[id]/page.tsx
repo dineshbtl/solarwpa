@@ -84,7 +84,7 @@ export default function InstallationDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white relative">
+      <div className="min-h-screen bg-background relative">
         <SolarWatermark />
         <main className="mx-auto max-w-7xl px-4 py-8 relative z-10">
           <p className="text-muted-foreground">Loading installation...</p>
@@ -95,7 +95,7 @@ export default function InstallationDetailPage() {
 
   if (error || !installation) {
     return (
-      <div className="min-h-screen bg-white relative">
+      <div className="min-h-screen bg-background relative">
         <SolarWatermark />
         <main className="mx-auto max-w-7xl px-4 py-8 relative z-10">
           <p className="text-muted-foreground">{error?.message ?? "Installation not found."}</p>
@@ -108,7 +108,7 @@ export default function InstallationDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white relative">
+    <div className="min-h-screen bg-background relative">
       <SolarWatermark />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 relative z-10">
         <Link href="/installations">
@@ -124,7 +124,7 @@ export default function InstallationDetailPage() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-2xl text-solar-dark">{installation.customerName}</CardTitle>
+                  <CardTitle className="text-2xl text-foreground">{installation.customerName}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">Installation ID: {installation.id}</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -167,7 +167,7 @@ export default function InstallationDetailPage() {
             <CardContent className="pt-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="font-semibold text-solar-dark">Actions</h3>
+                  <h3 className="font-semibold text-foreground">Actions</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Update installation status as work progresses.
                   </p>
@@ -205,23 +205,23 @@ export default function InstallationDetailPage() {
             {/* Installation Info */}
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Installation Details</CardTitle>
+                <CardTitle className="text-lg text-foreground">Installation Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Address</p>
-                  <p className="mt-1 text-sm text-solar-dark">{installation.address}</p>
+                  <p className="mt-1 text-sm text-foreground">{installation.address}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Installation Engineer</p>
-                  <p className="mt-1 text-sm text-solar-dark">{installation.engineerName || installation.engineerId || "—"}</p>
+                  <p className="mt-1 text-sm text-foreground">{installation.engineerName || installation.engineerId || "—"}</p>
                   {installation.engineerId && <p className="text-xs text-muted-foreground">{installation.engineerId}</p>}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {installation.startedAt && (
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Started</p>
-                      <p className="mt-1 text-sm text-solar-dark">
+                      <p className="mt-1 text-sm text-foreground">
                         {new Date(installation.startedAt).toLocaleDateString("en-IN")}
                       </p>
                     </div>
@@ -229,7 +229,7 @@ export default function InstallationDetailPage() {
                   {installation.completedAt && (
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Completed</p>
-                      <p className="mt-1 text-sm text-solar-dark">
+                      <p className="mt-1 text-sm text-foreground">
                         {new Date(installation.completedAt).toLocaleDateString("en-IN")}
                       </p>
                     </div>
@@ -241,13 +241,13 @@ export default function InstallationDetailPage() {
             {/* Progress */}
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Installation Progress</CardTitle>
+                <CardTitle className="text-lg text-foreground">Installation Progress</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Overall Progress</span>
-                    <span className="font-semibold text-solar-dark">
+                    <span className="font-semibold text-foreground">
                       {installation.status === "completed" ? "100%" : "75%"}
                     </span>
                   </div>
@@ -262,21 +262,21 @@ export default function InstallationDetailPage() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="text-sm text-solar-dark">Materials received and scanned</span>
+                    <span className="text-sm text-foreground">Materials received and scanned</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="text-sm text-solar-dark">Panels installed</span>
+                    <span className="text-sm text-foreground">Panels installed</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span className="text-sm text-solar-dark">Wiring completed</span>
+                    <span className="text-sm text-foreground">Wiring completed</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <CheckCircle
-                      className={`h-5 w-5 ${installation.status === "completed" ? "text-green-600" : "text-gray-300"}`}
+                      className={`h-5 w-5 ${installation.status === "completed" ? "text-green-600" : "text-muted-foreground300"}`}
                     />
-                    <span className="text-sm text-solar-dark">Final inspection</span>
+                    <span className="text-sm text-foreground">Final inspection</span>
                   </div>
                 </div>
               </CardContent>
@@ -287,9 +287,9 @@ export default function InstallationDetailPage() {
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg text-solar-dark">Materials & Serial Numbers</CardTitle>
+                <CardTitle className="text-lg text-foreground">Materials & Serial Numbers</CardTitle>
                 <div className="rounded-lg bg-solar-yellow px-3 py-1">
-                  <span className="text-sm font-semibold text-solar-dark">{(installation.materials ?? []).length} items</span>
+                  <span className="text-sm font-semibold text-foreground">{(installation.materials ?? []).length} items</span>
                 </div>
               </div>
             </CardHeader>
@@ -298,10 +298,10 @@ export default function InstallationDetailPage() {
                 {(installation.materials ?? []).map((material) => (
                   <div key={material.id} className="flex items-center gap-4 rounded-lg border border-solar p-4">
                     <div className="rounded-lg bg-solar-yellow p-2">
-                      <Package className="h-5 w-5 text-solar-dark" />
+                      <Package className="h-5 w-5 text-foreground" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold text-solar-dark">{material.name}</h4>
+                      <h4 className="font-semibold text-foreground">{material.name}</h4>
                       <div className="mt-1 flex gap-4 text-xs text-muted-foreground">
                         <span>S/N: {material.serialNumber}</span>
                         <span>Barcode: {material.barcode}</span>
@@ -317,7 +317,7 @@ export default function InstallationDetailPage() {
           {/* Installation Photos */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Installation Photos</CardTitle>
+              <CardTitle className="text-lg text-foreground">Installation Photos</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -340,7 +340,7 @@ export default function InstallationDetailPage() {
                           <div className="flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
                             <Camera className="h-10 w-10 text-muted-foreground/60" />
                             {fileName ? (
-                              <span className="font-medium text-solar-dark">{fileName}</span>
+                              <span className="font-medium text-foreground">{fileName}</span>
                             ) : (
                               <span>Photo</span>
                             )}
@@ -348,7 +348,7 @@ export default function InstallationDetailPage() {
                         )}
                       </div>
                       <div>
-                        <span className="inline-flex items-center rounded-full bg-solar-yellow px-2 py-1 text-xs font-medium text-solar-dark">
+                        <span className="inline-flex items-center rounded-full bg-solar-yellow px-2 py-1 text-xs font-medium text-foreground">
                           {String(category || "").replace("_", " ") || "photo"}
                         </span>
                         <p className="mt-1 text-sm text-muted-foreground">{description || "-"}</p>
@@ -369,7 +369,7 @@ export default function InstallationDetailPage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold text-solar-dark">Ready for Inspection</h3>
+                    <h3 className="font-semibold text-foreground">Ready for Inspection</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Submit this installation for manager review and inspection
                     </p>
