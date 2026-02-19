@@ -174,19 +174,19 @@ export default function InstallationDetailPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {installation.status === "pending" && (
-                    <Button onClick={handleStart} className="bg-solar-dark text-white hover:bg-solar-dark/90">
+                    <Button onClick={handleStart} className="bg-solar-dark text-black hover:bg-solar-dark/90">
                       <Play className="mr-2 h-4 w-4" />
                       Start
                     </Button>
                   )}
                   {installation.status === "in_progress" && (
-                    <Button onClick={handleComplete} className="bg-solar-dark text-white hover:bg-solar-dark/90">
+                    <Button onClick={handleComplete} className="bg-solar-dark text-black hover:bg-solar-dark/90">
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Mark Completed
                     </Button>
                   )}
                   {installation.status === "completed" && (
-                    <Button onClick={handleSubmitForInspection} className="bg-solar-dark text-white hover:bg-solar-dark/90">
+                    <Button onClick={handleSubmitForInspection} className="bg-solar-dark text-black  hover:bg-solar-dark/90">
                       <Send className="mr-2 h-4 w-4" />
                       Submit for Inspection
                     </Button>
