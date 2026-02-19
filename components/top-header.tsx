@@ -7,14 +7,39 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useRole } from "@/contexts/role-context"
 import { roleLabel } from "@/lib/rbac"
+import { getCurrentProfileFromSupabase } from "@/lib/supabase/users"
+import type { User } from "@/lib/store/users"
+import Link from "next/link"
 
 export function TopHeader() {
   const { role } = useRole()
   const [mounted, setMounted] = useState(false)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const user = await getCurrentProfileFromSupabase()
+        setCurrentUser(user)
+      } catch (err) {
+        console.error("Error loading user:", err)
+      }
+    }
+    loadUser()
+  }, [])
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
+  }
 
   return (
     <header className="sticky top-0 z-40 bg-gradient-topbar border-b border-border">
@@ -72,18 +97,22 @@ export function TopHeader() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full hover:bg-transparent">
                   <div className="w-9 h-9 bg-gradient-to-br from-red-400 to-red-500 rounded-full flex items-center justify-center text-white text-xs font-semibold">
-                    TM
+                    {currentUser ? getInitials(currentUser.name) : "?"}
                   </div>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-3 py-2 text-sm">
-                  <p className="font-semibold text-foreground">Totok Michael</p>
-                  <p className="text-muted-foreground text-xs">tmichael20@gmail.com</p>
+                  <p className="font-semibold text-foreground">{currentUser?.name || "User"}</p>
+                  <p className="text-muted-foreground text-xs">{currentUser?.email || "No email"}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Profile</DropdownMenuItem>
-                <DropdownMenuItem>Settings</DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/profile" className="cursor-pointer">Profile</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="cursor-pointer">Settings</Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={(e) => {
                   e.preventDefault()
                   window.location.href = "/logout"
@@ -93,7 +122,7 @@ export function TopHeader() {
           ) : (
             <Button variant="ghost" size="icon" className="rounded-full hover:bg-transparent" type="button" tabIndex={-1}>
               <div className="w-9 h-9 bg-gradient-to-br from-red-400 to-red-500 rounded-full flex items-center justify-center text-white text-xs font-semibold">
-                TM
+                ?
               </div>
             </Button>
           )}

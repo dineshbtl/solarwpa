@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen, Users, Settings, HelpCircle, LogOut } from "lucide-react"
+import { LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen, Users, Settings, HelpCircle, LogOut, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRole } from "@/contexts/role-context"
 import { getAccessibleRoutes } from "@/lib/route-permissions"
@@ -18,6 +18,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 }
 
 const generalItems = [
+  { label: "Profile", href: "/profile", icon: User },
   { label: "Settings", href: "/settings", icon: Settings },
   { label: "Help", href: "/help", icon: HelpCircle },
   { label: "Logout", href: "/logout", icon: LogOut },

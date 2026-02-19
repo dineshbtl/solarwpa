@@ -24,6 +24,7 @@ export const ROUTE_CONFIG: RouteConfig[] = [
 
 export const GENERAL_ROUTES: RouteConfig[] = [
   { href: '/dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
+  { href: '/profile', label: 'Profile', icon: 'User' },
   { href: '/settings', label: 'Settings', icon: 'Settings' },
   { href: '/help', label: 'Help', icon: 'HelpCircle' },
   { href: '/logout', label: 'Logout', icon: 'LogOut' },

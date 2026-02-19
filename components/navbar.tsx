@@ -63,9 +63,18 @@ export function Navbar() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-card">
-              <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem>Logout</DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/profile" className="cursor-pointer">Profile</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="cursor-pointer">Settings</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/help" className="cursor-pointer">Help</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/logout" className="cursor-pointer">Logout</Link>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
