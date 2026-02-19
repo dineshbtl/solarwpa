@@ -10,45 +10,66 @@ import { mockInspections, mockInstallations } from "@/lib/mock-data"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
-import { assignInspectionInspector, getInspectionById, setGovernmentInspection } from "@/lib/store/inspections"
-import { getInstallationById } from "@/lib/store/installations"
-import { getSurveyById } from "@/lib/store/surveys"
+import * as inspectionsData from "@/lib/data/inspections"
+import * as installationsData from "@/lib/data/installations"
+import * as surveysData from "@/lib/data/surveys"
 import { getUserById, listUsers, seedUsers } from "@/lib/store/users"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { WorkflowSummarySection } from "@/components/workflow-summary-section"
+import { useRole } from "@/contexts/role-context"
 
 export default function InspectionDetailPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const id = params?.id
+  const { role, currentUser } = useRole()
   const [govRemarks, setGovRemarks] = useState("")
   const [inspection, setInspection] = useState<any>(null)
   const [installation, setInstallation] = useState<any>(null)
+  const [linkedSurvey, setLinkedSurvey] = useState<any>(null)
   const [isStored, setIsStored] = useState(false)
   const [inspectorId, setInspectorId] = useState<string>("__none__")
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     seedUsers()
-    if (!id) return
-    const storedInspection = getInspectionById(id)
-    if (storedInspection) {
-      setInspection(storedInspection)
-      setIsStored(true)
-      setInspectorId(storedInspection.inspectorId ?? "__none__")
-      const storedInstallation = getInstallationById(storedInspection.installationId)
-      setInstallation(storedInstallation ?? null)
-      return
+    const loadData = async () => {
+      if (!id) return
+      try {
+        // Try to get from data layer (localStorage or Supabase)
+        const storedInspection = await inspectionsData.getInspectionById(id)
+        if (storedInspection) {
+          setInspection(storedInspection)
+          setIsStored(true)
+          setInspectorId(storedInspection.inspectorId ?? "__none__")
+          const storedInstallation = await installationsData.getInstallationById(storedInspection.installationId)
+          setInstallation(storedInstallation ?? null)
+          // Load linked survey
+          const surveyId = storedInstallation?.surveyId ?? storedInspection.surveyId
+          if (surveyId) {
+            const survey = await surveysData.getSurveyById(surveyId)
+            setLinkedSurvey(survey ?? null)
+          }
+          setLoading(false)
+          return
+        }
+        // Fall back to mock data
+        const foundInspection = mockInspections.find((i) => i.id === id)
+        if (foundInspection) {
+          setInspection(foundInspection)
+          const foundInstallation = mockInstallations.find((inst) => inst.id === foundInspection.installationId)
+          setInstallation(foundInstallation)
+          setIsStored(false)
+        }
+      } catch (e) {
+        console.error("Error loading inspection:", e)
+      }
+      setLoading(false)
     }
-    const foundInspection = mockInspections.find((i) => i.id === id)
-    if (foundInspection) {
-      setInspection(foundInspection)
-      const foundInstallation = mockInstallations.find((inst) => inst.id === foundInspection.installationId)
-      setInstallation(foundInstallation)
-      setIsStored(false)
-    }
+    loadData()
   }, [id])
 
-  if (!inspection || !installation) {
+  if (loading || !inspection || !installation) {
     return (
       <div className="min-h-screen bg-gradient-dark-green relative">
         <SolarWatermark />
@@ -59,7 +80,6 @@ export default function InspectionDetailPage() {
     )
   }
 
-  const linkedSurvey = (installation.surveyId ?? inspection.surveyId) ? getSurveyById(installation.surveyId ?? inspection.surveyId ?? "") : null
   const approvedByEvent = linkedSurvey && Array.isArray(linkedSurvey.activity)
     ? linkedSurvey.activity.find((e: any) => e.action === "status_changed" && (e.meta as any)?.status === "approved")
     : null
@@ -67,53 +87,63 @@ export default function InspectionDetailPage() {
   const inspectorUser = inspection.inspectorId ? getUserById(inspection.inspectorId) : null
   const inspectorNameDisplay = inspection.governmentInspection?.inspectorName ?? inspectorUser?.name
 
-  const handleAssignInspector = (value: string) => {
+  const handleAssignInspector = async (value: string) => {
     if (!isStored) {
       toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated." })
       return
     }
     if (!id) return
-    const nextId = value === "__none__" ? undefined : value
-    const updated = assignInspectionInspector(id, nextId)
-    setInspection(updated)
-    setInspectorId(value)
-    toast({ title: "Inspector assigned" })
+    try {
+      const nextId = value === "__none__" ? undefined : value
+      const updated = await inspectionsData.assignInspectionInspector(id, nextId)
+      setInspection(updated)
+      setInspectorId(value)
+      toast({ title: "Inspector assigned" })
+    } catch (e) {
+      toast({ title: "Failed to assign inspector", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })
+    }
   }
 
-  const handleGovApprove = () => {
+  const handleGovApprove = async () => {
     if (!govRemarks) {
       toast({ title: "Remarks required", description: "Please provide inspection remarks.", variant: "destructive" })
       return
     }
-    if (isStored) {
+    if (!isStored) {
+      toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated.", variant: "destructive" })
+      return
+    }
+    try {
       if (!id) return
       const actorName = inspection.inspectorId ? getUserById(inspection.inspectorId)?.name : undefined
-      const updated = setGovernmentInspection(id, true, govRemarks, actorName ?? "Inspector")
+      const updated = await inspectionsData.setGovernmentInspection(id, true, govRemarks, actorName ?? "Inspector")
       setInspection(updated)
       toast({ title: "Government approved", description: "Project completed." })
       router.push("/inspections")
-      return
+    } catch (e) {
+      toast({ title: "Failed to approve", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })
     }
-    toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated." })
-    router.push("/inspections")
   }
 
-  const handleGovReject = () => {
+  const handleGovReject = async () => {
     if (!govRemarks) {
       toast({ title: "Remarks required", description: "Please provide remarks for rejection.", variant: "destructive" })
       return
     }
-    if (isStored) {
+    if (!isStored) {
+      toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated.", variant: "destructive" })
+      return
+    }
+    try {
       if (!id) return
       const actorName = inspection.inspectorId ? getUserById(inspection.inspectorId)?.name : undefined
-      const updated = setGovernmentInspection(id, false, govRemarks, actorName ?? "Inspector")
+      const updated = await inspectionsData.setGovernmentInspection(id, false, govRemarks, actorName ?? "Inspector")
       setInspection(updated)
       toast({ title: "Government rejected", description: "Inspection reopened for corrections." })
       router.push("/inspections")
-      return
+    } catch (e) {
+      toast({ title: "Failed to reject", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })
     }
-    toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated." })
-    router.push("/inspections")
   }
 
   return (
@@ -258,25 +288,29 @@ export default function InspectionDetailPage() {
               <CardTitle className="text-lg text-solar-dark">Installation Photos</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {installation.installationImages.map((image) => (
-                  <div key={image.id} className="space-y-2">
-                    <div className="overflow-hidden rounded-lg border border-solar">
-                      <img
-                        src={image.url || "/placeholder.svg"}
-                        alt={image.description}
-                        className="h-64 w-full object-cover"
-                      />
+              {(installation.photos && installation.photos.length > 0) || (installation.installationImages && installation.installationImages.length > 0) ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {((installation.photos || installation.installationImages) as Array<{id?: string, url?: string, description?: string, category?: string}>).map((image: any, idx: number) => (
+                    <div key={image.id || idx} className="space-y-2">
+                      <div className="overflow-hidden rounded-lg border border-solar">
+                        <img
+                          src={image.url || "/placeholder.svg"}
+                          alt={image.description || "Installation photo"}
+                          className="h-64 w-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <span className="inline-flex items-center rounded-full bg-solar-yellow px-2 py-1 text-xs font-medium text-solar-dark">
+                          {(image.category ?? "").replace(/_/g, " ") || "photo"}
+                        </span>
+                        <p className="mt-1 text-sm text-muted-foreground">{image.description || "-"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="inline-flex items-center rounded-full bg-solar-yellow px-2 py-1 text-xs font-medium text-solar-dark">
-                        {image.category.replace("_", " ")}
-                      </span>
-                      <p className="mt-1 text-sm text-muted-foreground">{image.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No photos available.</p>
+              )}
             </CardContent>
           </Card>
 

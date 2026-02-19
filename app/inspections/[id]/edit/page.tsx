@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/hooks/use-toast"
-import { getInspectionById, updateInspectionDetails } from "@/lib/store/inspections"
+import * as inspectionsData from "@/lib/data/inspections"
 import { getUserById, listUsers, seedUsers } from "@/lib/store/users"
 
 export default function EditInspectionPage() {
@@ -33,20 +33,29 @@ export default function EditInspectionPage() {
   const inspectorOptions = useMemo(() => listUsers().filter((u) => u.role === "government"), [])
 
   useEffect(() => {
-    if (!id) return
-    const insp = getInspectionById(id)
-    if (!insp) {
-      setNotFound(true)
+    seedUsers()
+    const loadData = async () => {
+      if (!id) return
+      try {
+        const insp = await inspectionsData.getInspectionById(id)
+        if (!insp) {
+          setNotFound(true)
+          setLoading(false)
+          return
+        }
+        setCustomerName(insp.customerName ?? "")
+        setAddress(insp.address ?? "")
+        setInspectorId(insp.inspectorId ?? "__none__")
+      } catch (e) {
+        console.error("Error loading inspection:", e)
+        setNotFound(true)
+      }
       setLoading(false)
-      return
     }
-    setCustomerName(insp.customerName ?? "")
-    setAddress(insp.address ?? "")
-    setInspectorId(insp.inspectorId ?? "__none__")
-    setLoading(false)
+    loadData()
   }, [id])
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!id) return
     if (!customerName.trim() || !address.trim()) {
       toast({
@@ -58,7 +67,7 @@ export default function EditInspectionPage() {
     }
     try {
       const nextInspectorId = inspectorId === "__none__" ? undefined : inspectorId
-      updateInspectionDetails(id, { customerName, address, inspectorId: nextInspectorId })
+      await inspectionsData.updateInspectionDetails(id, { customerName, address, inspectorId: nextInspectorId })
       toast({ title: "Inspection updated" })
       router.push(`/inspections/${id}`)
     } catch (e) {
