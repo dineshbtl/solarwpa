@@ -4,6 +4,7 @@ import { Poppins } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { LayoutWrapper } from "@/components/layout-wrapper"
 import { Toaster } from "@/components/ui/toaster"
+import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 
 const poppins = Poppins({
@@ -24,11 +25,18 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${poppins.className} font-sans antialiased`}>
-        <LayoutWrapper>{children}</LayoutWrapper>
-        <Toaster />
-        <Analytics />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <LayoutWrapper>{children}</LayoutWrapper>
+          <Toaster />
+          <Analytics />
+        </ThemeProvider>
       </body>
     </html>
   )

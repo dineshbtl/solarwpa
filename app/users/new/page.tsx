@@ -18,7 +18,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { toast } from "@/hooks/use-toast"
 import type { Role } from "@/lib/rbac"
 import { roleLabel } from "@/lib/rbac"
-import { CreateUserSchema, createUser, seedUsers, type CreateUserInput } from "@/lib/store/users"
+import { CreateUserSchema, type CreateUserInput } from "@/lib/store/users"
+import { createUser, seedUsers } from "@/lib/data/users"
 
 export default function NewUserPage() {
   const router = useRouter()
@@ -47,19 +48,21 @@ export default function NewUserPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const onSubmit = (values: CreateUserInput) => {
+  const onSubmit = async (values: CreateUserInput) => {
     setIsSubmitting(true)
     try {
-      const user = createUser(values)
+      const user = await createUser(values)
       toast({
         title: "User created",
         description: `${user.name} (${roleLabel(user.role)}) was created successfully.`,
       })
       router.push("/users")
     } catch (e) {
+      console.error('[onSubmit] Error creating user:', e)
+      const errorMessage = e instanceof Error ? e.message : "Please try again."
       toast({
         title: "Could not create user",
-        description: e instanceof Error ? e.message : "Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -71,14 +74,14 @@ export default function NewUserPage() {
     <div className="p-6 sm:p-8">
       <div className="mb-6">
         <Link href="/users">
-          <Button variant="ghost" className="text-solar-dark hover:bg-solar-beige">
+          <Button variant="ghost" className="text-foreground hover:bg-accent">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Users
           </Button>
         </Link>
       </div>
 
-      <Card className="max-w-2xl border-border bg-white shadow-sm rounded-xl">
+      <Card className="max-w-2xl border-border bg-card shadow-sm rounded-xl">
         <CardHeader>
           <CardTitle className="text-2xl text-foreground">Create User</CardTitle>
           <p className="text-sm text-muted-foreground">Add a new user with full name, email, password, role, address and status.</p>
@@ -261,10 +264,10 @@ export default function NewUserPage() {
               />
 
               {/* Submit — same style as installation form */}
-              <div className="rounded-xl border-2 border-green-200 bg-green-50/80 p-5">
+              <div className="rounded-xl border-2 border-green-200 bg-muted/50/80 p-5">
                 <p className="mb-4 text-sm font-medium text-green-800">Ready? Create user</p>
                 <div className="flex flex-wrap gap-4">
-                  <Button type="button" variant="outline" size="lg" onClick={() => router.push("/users")} className="border-solar text-solar-dark">
+                  <Button type="button" variant="outline" size="lg" onClick={() => router.push("/users")} className="border-solar text-foreground">
                     Cancel
                   </Button>
                   <Button

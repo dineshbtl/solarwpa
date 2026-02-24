@@ -208,7 +208,7 @@ export default function SurveysPage() {
       </div>
 
       {/* Filters */}
-      <Card className="mb-6 bg-white border-gray-200 shadow-sm rounded-xl">
+      <Card className="mb-6 bg-card border-border shadow-sm rounded-xl">
         <CardContent className="pt-6">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -218,12 +218,12 @@ export default function SurveysPage() {
                   placeholder="Search by name, service number, Aadhaar, PAN, section, mobile..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="border-gray-200 bg-background pl-9 rounded-lg"
+                  className="border-border bg-background pl-9 rounded-lg"
                 />
               </div>
               <div className="flex flex-wrap gap-2 sm:gap-3">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full border-gray-200 bg-background sm:w-[160px] rounded-lg">
+                  <SelectTrigger className="w-full border-border bg-background sm:w-[160px] rounded-lg">
                     <Filter className="mr-2 h-4 w-4 shrink-0" />
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
@@ -236,7 +236,7 @@ export default function SurveysPage() {
                   </SelectContent>
                 </Select>
                 <Select value={sectionFilter || "all"} onValueChange={(v) => setSectionFilter(v === "all" ? "" : v)}>
-                  <SelectTrigger className="w-full border-gray-200 bg-background sm:w-[160px] rounded-lg">
+                  <SelectTrigger className="w-full border-border bg-background sm:w-[160px] rounded-lg">
                     <SelectValue placeholder="Section" />
                   </SelectTrigger>
                   <SelectContent>
@@ -249,7 +249,7 @@ export default function SurveysPage() {
                   </SelectContent>
                 </Select>
                 <Select value={subDivisionFilter || "all"} onValueChange={(v) => setSubDivisionFilter(v === "all" ? "" : v)}>
-                  <SelectTrigger className="w-full border-gray-200 bg-background sm:w-[180px] rounded-lg">
+                  <SelectTrigger className="w-full border-border bg-background sm:w-[180px] rounded-lg">
                     <SelectValue placeholder="Sub Division" />
                   </SelectTrigger>
                   <SelectContent>
@@ -267,7 +267,7 @@ export default function SurveysPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-gray-200 bg-white shadow-sm rounded-xl">
+      <Card className="border-border bg-card shadow-sm rounded-xl">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -454,7 +454,7 @@ export default function SurveysPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {filteredSurveys.map((s: any, idx: number) => (
                   <Link key={`${s.kind}-${s.id}`} href={`/surveys/${s.id}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <Card className="border-gray-200 bg-white shadow-sm rounded-xl transition-colors hover:bg-muted/50 cursor-pointer">
+                    <Card className="border-border bg-card shadow-sm rounded-xl transition-colors hover:bg-muted/50 cursor-pointer">
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
@@ -527,7 +527,7 @@ export default function SurveysPage() {
                   </Link>
                 ))}
                 {filteredSurveys.length === 0 && !surveysLoading && (
-                  <Card className="border-gray-200 bg-white shadow-sm rounded-xl sm:col-span-2 lg:col-span-3">
+                  <Card className="border-border bg-card shadow-sm rounded-xl sm:col-span-2 lg:col-span-3">
                     <CardContent className="py-10 text-center text-sm text-muted-foreground">
                       No surveys found. Try a different search or status filter.
                     </CardContent>

@@ -15,7 +15,7 @@ export function RoleDashboard() {
   return (
     <div className="min-h-screen bg-[#f5f3ef]">
       {/* Role Selector - for demo purposes */}
-      <div className="bg-white border-b border-neutral-200 px-6 py-3">
+      <div className="bg-white border-b border-border px-6 py-3">
         <div className="flex gap-2">
           <Button
             onClick={() => setCurrentRole("surveyor")}

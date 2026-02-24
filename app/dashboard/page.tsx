@@ -75,7 +75,7 @@ export default function DashboardPage() {
                     <h3 className="mt-3 text-4xl font-bold text-white">{stats.totalProjects}</h3>
                     <p className="mt-2 text-xs text-green-100">All projects</p>
                   </div>
-                  <div className="rounded-lg bg-white/20 p-3">
+                  <div className="rounded-lg bg-background/20 p-3">
                     <TrendingUp className="h-6 w-6 text-white" />
                   </div>
                 </div>
@@ -87,7 +87,7 @@ export default function DashboardPage() {
                     <h3 className="mt-3 text-4xl font-bold text-white">{stats.pendingSurveys}</h3>
                     <p className="mt-2 text-xs text-green-100">Awaiting approval</p>
                   </div>
-                  <div className="rounded-lg bg-white/20 p-3">
+                  <div className="rounded-lg bg-background/20 p-3">
                     <MapPin className="h-6 w-6 text-white" />
                   </div>
                 </div>
@@ -99,7 +99,7 @@ export default function DashboardPage() {
                     <h3 className="mt-3 text-4xl font-bold text-white">{stats.activeInstallations}</h3>
                     <p className="mt-2 text-xs text-green-100">In progress</p>
                   </div>
-                  <div className="rounded-lg bg-white/20 p-3">
+                  <div className="rounded-lg bg-background/20 p-3">
                     <Wrench className="h-6 w-6 text-white" />
                   </div>
                 </div>
@@ -111,7 +111,7 @@ export default function DashboardPage() {
                     <h3 className="mt-3 text-4xl font-bold text-white">{stats.completedThisMonth}</h3>
                     <p className="mt-2 text-xs text-green-100">This month</p>
                   </div>
-                  <div className="rounded-lg bg-white/20 p-3">
+                  <div className="rounded-lg bg-background/20 p-3">
                     <CheckCircle className="h-6 w-6 text-white" />
                   </div>
                 </div>
@@ -119,12 +119,12 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
-              <Card className="border-border bg-white shadow-sm">
+              <Card className="border-border bg-card shadow-sm">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-semibold text-foreground">Recent Surveys</CardTitle>
                     <Link href="/surveys">
-                      <Button variant="ghost" size="sm" className="text-primary hover:bg-green-50">
+                      <Button variant="ghost" size="sm" className="text-primary hover:bg-muted/50">
                         View All
                       </Button>
                     </Link>
@@ -137,7 +137,7 @@ export default function DashboardPage() {
                     ) : (
                       recentSurveys.map((survey) => (
                         <Link key={survey.id} href={`/surveys/${survey.id}`}>
-                          <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-green-50">
+                          <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50">
                             <div className="rounded-lg bg-gradient-green-light p-2">
                               <ClipboardCheck className="h-5 w-5 text-white" />
                             </div>
@@ -171,12 +171,12 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-border bg-white shadow-sm">
+              <Card className="border-border bg-card shadow-sm">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg font-semibold text-foreground">Active Installations</CardTitle>
                     <Link href="/installations">
-                      <Button variant="ghost" size="sm" className="text-primary hover:bg-green-50">
+                      <Button variant="ghost" size="sm" className="text-primary hover:bg-muted/50">
                         View All
                       </Button>
                     </Link>
@@ -189,7 +189,7 @@ export default function DashboardPage() {
                     ) : (
                       displayInstallations.map((installation: Installation) => (
                         <Link key={installation.id} href={`/installations/${installation.id}`}>
-                          <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-green-50">
+                          <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50">
                             <div className="rounded-lg bg-gradient-green-light p-2">
                               <Wrench className="h-5 w-6 text-white" />
                             </div>
@@ -224,12 +224,12 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            <Card className="mt-6 border-border bg-white shadow-sm">
+            <Card className="mt-6 border-border bg-card shadow-sm">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg font-semibold text-foreground">Pending Inspections</CardTitle>
                   <Link href="/inspections">
-                    <Button variant="ghost" size="sm" className="text-primary hover:bg-green-50">
+                    <Button variant="ghost" size="sm" className="text-primary hover:bg-muted/50">
                       View All
                     </Button>
                   </Link>
@@ -242,7 +242,7 @@ export default function DashboardPage() {
                   ) : (
                     pendingInspections.map((inspection: Inspection) => (
                       <Link key={inspection.id} href={`/inspections/${inspection.id}`}>
-                        <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-green-50">
+                        <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50">
                           <div className="rounded-lg bg-gradient-green-light p-2">
                             <CheckCircle className="h-5 w-6 text-white" />
                           </div>

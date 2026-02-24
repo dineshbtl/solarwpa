@@ -49,14 +49,14 @@ export default function UserDetailPage() {
     <div className="p-6 sm:p-8">
       <div className="mb-6">
         <Link href="/users">
-          <Button variant="ghost" className="text-solar-dark hover:bg-solar-beige">
+          <Button variant="ghost" className="text-foreground hover:bg-accent">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Users
           </Button>
         </Link>
       </div>
 
-      <Card className="max-w-2xl border-border bg-white shadow-sm rounded-xl">
+      <Card className="max-w-2xl border-border bg-card shadow-sm rounded-xl">
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
@@ -65,8 +65,8 @@ export default function UserDetailPage() {
               <span
                 className={`mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
                   (user.status ?? "active") === "active"
-                    ? "bg-green-50 text-green-700"
-                    : "bg-gray-100 text-gray-600"
+                    ? "bg-muted/50 text-green-700"
+                    : "bg-muted text-muted-foreground600"
                 }`}
               >
                 <CircleDot className="mr-1 h-3.5 w-3.5" />
@@ -85,47 +85,47 @@ export default function UserDetailPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <p className="text-sm font-medium text-muted-foreground">Full name</p>
-              <p className="mt-1 text-solar-dark">{user.name}</p>
+              <p className="mt-1 text-foreground">{user.name}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Email</p>
-              <p className="mt-1 text-solar-dark">{user.email}</p>
+              <p className="mt-1 text-foreground">{user.email}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Password</p>
-              <p className="mt-1 text-solar-dark">{user.password ? "••••••••" : "—"}</p>
+              <p className="mt-1 text-foreground">{user.password ? "••••••••" : "—"}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Role</p>
-              <p className="mt-1 text-solar-dark">{roleLabel(user.role)}</p>
+              <p className="mt-1 text-foreground">{roleLabel(user.role)}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Phone number</p>
-              <p className="mt-1 text-solar-dark">{user.phone || "—"}</p>
+              <p className="mt-1 text-foreground">{user.phone || "—"}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Aadhaar number</p>
-              <p className="mt-1 text-solar-dark">{user.aadharNo || "—"}</p>
+              <p className="mt-1 text-foreground">{user.aadharNo || "—"}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">City</p>
-              <p className="mt-1 text-solar-dark">{user.city || "—"}</p>
+              <p className="mt-1 text-foreground">{user.city || "—"}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">State</p>
-              <p className="mt-1 text-solar-dark">{user.state || "—"}</p>
+              <p className="mt-1 text-foreground">{user.state || "—"}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">District</p>
-              <p className="mt-1 text-solar-dark">{user.district || "—"}</p>
+              <p className="mt-1 text-foreground">{user.district || "—"}</p>
             </div>
             <div className="sm:col-span-2">
               <p className="text-sm font-medium text-muted-foreground">Full address</p>
-              <p className="mt-1 text-solar-dark whitespace-pre-wrap">{user.fullAddress || "—"}</p>
+              <p className="mt-1 text-foreground whitespace-pre-wrap">{user.fullAddress || "—"}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Created</p>
-              <p className="mt-1 text-solar-dark">
+              <p className="mt-1 text-foreground">
                 {user.createdAt ? new Date(user.createdAt).toLocaleString() : "—"}
               </p>
             </div>
@@ -137,7 +137,7 @@ export default function UserDetailPage() {
               {permissionsForRole(user.role).map((p) => (
                 <span
                   key={p}
-                  className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700"
+                  className="inline-flex items-center rounded-full bg-muted/50 px-2.5 py-1 text-xs font-medium text-green-700"
                 >
                   <ShieldCheck className="mr-1 h-3.5 w-3.5" />
                   {p.replace(/_/g, " ")}

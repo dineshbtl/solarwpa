@@ -62,7 +62,7 @@ function PhotoPreviewCell({
     <div className="flex min-h-[140px] flex-col items-center justify-center gap-2 bg-muted/30 text-center text-sm text-muted-foreground" style={{ minHeight: 140 }}>
       <Camera className="h-10 w-10 shrink-0 text-muted-foreground/60" />
       {existingFile?.name ? (
-        <span className="font-medium text-solar-dark">{existingFile.name}</span>
+        <span className="font-medium text-foreground">{existingFile.name}</span>
       ) : (
         <span>No image</span>
       )}
@@ -319,7 +319,7 @@ export default function EditInstallationPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white p-6 sm:p-8">
+      <div className="min-h-screen bg-background p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
     )
@@ -327,7 +327,7 @@ export default function EditInstallationPage() {
 
   if (error || !installation) {
     return (
-      <div className="min-h-screen bg-white p-6 sm:p-8">
+      <div className="min-h-screen bg-background p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Installation not found.</p>
         <div className="mt-4">
           <Link href="/installations">
@@ -339,11 +339,11 @@ export default function EditInstallationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <Link href={`/installations/${id}`}>
-            <Button variant="ghost" className="text-solar-dark hover:bg-solar-beige">
+            <Button variant="ghost" className="text-foreground hover:bg-accent">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Installation
             </Button>
@@ -369,7 +369,7 @@ export default function EditInstallationPage() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-2xl text-solar-dark">Edit Installation</CardTitle>
+                  <CardTitle className="text-2xl text-foreground">Edit Installation</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">ID: {installation?.id ?? id}</p>
                 </div>
                 <span
@@ -390,13 +390,13 @@ export default function EditInstallationPage() {
           {/* Installation Details — same layout as new form */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Installation Details</CardTitle>
+              <CardTitle className="text-lg text-foreground">Installation Details</CardTitle>
               <p className="text-sm text-muted-foreground">Job details (stored as project_id, survey_id, customer_name, address, engineer_name, engineer_id in backend).</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label className="text-solar-dark">Project (optional)</Label>
+                  <Label className="text-foreground">Project (optional)</Label>
                   <Select value={jobInfo.projectId || "__none__"} onValueChange={handleProjectChange}>
                     <SelectTrigger className="mt-2 border-solar bg-background">
                       <SelectValue placeholder="Select project" />
@@ -418,7 +418,7 @@ export default function EditInstallationPage() {
                   )}
                 </div>
                 <div>
-                  <Label className="text-solar-dark">Survey (optional) — search & scroll to load more; auto-fills name & address</Label>
+                  <Label className="text-foreground">Survey (optional) — search & scroll to load more; auto-fills name & address</Label>
                   <div className="mt-2">
                     <SurveySelect
                       value={jobInfo.surveyId}
@@ -431,7 +431,7 @@ export default function EditInstallationPage() {
               </div>
               {selectedSurveyDetail && (
                 <div className="rounded-lg border border-solar bg-muted/40 p-3 text-sm">
-                  <p className="font-medium text-solar-dark">Survey details</p>
+                  <p className="font-medium text-foreground">Survey details</p>
                   <p className="mt-1 text-muted-foreground">ID: {selectedSurveyDetail.id} · Service: {selectedSurveyDetail.serviceNo}</p>
                   <p className="text-muted-foreground">Beneficiary: {selectedSurveyDetail.beneficiaryName}</p>
                   {(selectedSurveyDetail.siteLocation?.section || selectedSurveyDetail.siteLocation?.district) && (
@@ -443,7 +443,7 @@ export default function EditInstallationPage() {
               )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="customerName" className="text-solar-dark">Customer Name *</Label>
+                  <Label htmlFor="customerName" className="text-foreground">Customer Name *</Label>
                   <Input
                     id="customerName"
                     value={jobInfo.customerName}
@@ -454,7 +454,7 @@ export default function EditInstallationPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="address" className="text-solar-dark">Address *</Label>
+                  <Label htmlFor="address" className="text-foreground">Address *</Label>
                   <Input
                     id="address"
                     value={jobInfo.address}
@@ -467,7 +467,7 @@ export default function EditInstallationPage() {
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <Label htmlFor="engineerName" className="text-solar-dark">Engineer Name (optional)</Label>
+                  <Label htmlFor="engineerName" className="text-foreground">Engineer Name (optional)</Label>
                   <Input
                     id="engineerName"
                     value={jobInfo.engineerName}
@@ -477,7 +477,7 @@ export default function EditInstallationPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="engineerId" className="text-solar-dark">Engineer ID (optional)</Label>
+                  <Label htmlFor="engineerId" className="text-foreground">Engineer ID (optional)</Label>
                   <Input
                     id="engineerId"
                     value={jobInfo.engineerId}
@@ -493,14 +493,14 @@ export default function EditInstallationPage() {
           {/* Materials & Equipment — same as new form: Add Material + Added Materials list */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Materials & Equipment</CardTitle>
+              <CardTitle className="text-lg text-foreground">Materials & Equipment</CardTitle>
               <p className="text-sm text-muted-foreground">Scan barcodes and enter serial numbers for all materials</p>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4 rounded-lg border border-solar bg-solar-beige p-4">
-                <h3 className="font-semibold text-solar-dark">Add Material</h3>
+                <h3 className="font-semibold text-foreground">Add Material</h3>
                 <div>
-                  <Label className="text-solar-dark">Material Name</Label>
+                  <Label className="text-foreground">Material Name</Label>
                   <Select
                     value={currentMaterial.name}
                     onValueChange={(v) => setCurrentMaterial({ ...currentMaterial, name: v })}
@@ -517,7 +517,7 @@ export default function EditInstallationPage() {
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-solar-dark">Serial Number</Label>
+                  <Label className="text-foreground">Serial Number</Label>
                   <Input
                     value={currentMaterial.serialNumber}
                     onChange={(e) => setCurrentMaterial({ ...currentMaterial, serialNumber: e.target.value })}
@@ -526,7 +526,7 @@ export default function EditInstallationPage() {
                   />
                 </div>
                 <div>
-                  <Label className="text-solar-dark">Barcode</Label>
+                  <Label className="text-foreground">Barcode</Label>
                   <div className="mt-2 flex gap-2">
                     <Input
                       value={currentMaterial.barcode}
@@ -534,7 +534,7 @@ export default function EditInstallationPage() {
                       className="border-solar bg-background"
                       placeholder="Scan or enter barcode"
                     />
-                    <Button type="button" onClick={handleScanBarcode} className="bg-solar-yellow text-solar-dark hover:bg-solar-yellow/90">
+                    <Button type="button" onClick={handleScanBarcode} className="bg-solar-yellow text-foreground hover:bg-solar-yellow/90">
                       <Scan className="h-4 w-4" />
                     </Button>
                   </div>
@@ -546,11 +546,11 @@ export default function EditInstallationPage() {
               </div>
               {materials.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="font-semibold text-solar-dark">Added Materials ({materials.length})</h3>
+                  <h3 className="font-semibold text-foreground">Added Materials ({materials.length})</h3>
                   {materials.map((m) => (
                     <div key={m.id} className="flex items-center gap-4 rounded-lg border border-solar bg-background p-4">
                       <div className="rounded-lg bg-solar-yellow p-2">
-                        <CheckCircle className="h-5 w-5 text-solar-dark" />
+                        <CheckCircle className="h-5 w-5 text-foreground" />
                       </div>
                       <div className="flex-1 grid gap-3 sm:grid-cols-3">
                         <div>
@@ -597,7 +597,7 @@ export default function EditInstallationPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => removeMaterial(m.id)}
-                        className="text-red-600 hover:bg-red-50 hover:text-red-700 shrink-0"
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -614,10 +614,10 @@ export default function EditInstallationPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg text-solar-dark">Installation Photos</CardTitle>
+                  <CardTitle className="text-lg text-foreground">Installation Photos</CardTitle>
                   <p className="text-sm text-muted-foreground">Upload photos of installation process and completed work</p>
                 </div>
-                <Button type="button" onClick={addPhoto} size="sm" className="bg-solar-yellow text-solar-dark hover:bg-solar-yellow/90">
+                <Button type="button" onClick={addPhoto} size="sm" className="bg-solar-yellow text-foreground hover:bg-solar-yellow/90">
                   <Plus className="mr-2 h-4 w-4" />
                   Add Photo
                 </Button>
@@ -627,8 +627,8 @@ export default function EditInstallationPage() {
               {photos.map((p) => (
                 <div key={p.id} className="space-y-3 rounded-lg border border-solar bg-solar-beige p-4">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-semibold text-solar-dark">Photo</h4>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => removePhoto(p.id)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
+                    <h4 className="font-semibold text-foreground">Photo</h4>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removePhoto(p.id)} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -636,7 +636,7 @@ export default function EditInstallationPage() {
                     <PhotoPreviewCell file={p.file} existingFile={p.existingFile} />
                   </div>
                   <div>
-                    <Label className="text-solar-dark">Category</Label>
+                    <Label className="text-foreground">Category</Label>
                     <Select value={p.category} onValueChange={(v) => updatePhoto(p.id, { category: v as LocalPhoto["category"] })}>
                       <SelectTrigger className="mt-2 border-solar bg-background">
                         <SelectValue />
@@ -649,7 +649,7 @@ export default function EditInstallationPage() {
                     </Select>
                   </div>
                   <div>
-                    <Label className="text-solar-dark">Description</Label>
+                    <Label className="text-foreground">Description</Label>
                     <Input
                       value={p.description}
                       onChange={(e) => updatePhoto(p.id, { description: e.target.value })}
@@ -658,7 +658,7 @@ export default function EditInstallationPage() {
                     />
                   </div>
                   <div>
-                    <Label className="text-solar-dark">Upload Photo</Label>
+                    <Label className="text-foreground">Upload Photo</Label>
                     <div className="mt-2 flex items-center gap-2">
                       <input
                         ref={(el) => { fileInputRefs.current[p.id] = el }}
@@ -681,7 +681,7 @@ export default function EditInstallationPage() {
                         <Upload className="mr-2 h-4 w-4" />
                         {p.file || p.existingFile ? "Replace" : "Upload"}
                       </Button>
-                      <Button type="button" size="icon" className="bg-solar-yellow text-solar-dark hover:bg-solar-yellow/90">
+                      <Button type="button" size="icon" className="bg-solar-yellow text-foreground hover:bg-solar-yellow/90">
                         <Camera className="h-4 w-4" />
                       </Button>
                     </div>
@@ -697,7 +697,7 @@ export default function EditInstallationPage() {
                 <div className="rounded-lg border-2 border-dashed border-solar bg-solar-beige p-8 text-center">
                   <Camera className="mx-auto h-12 w-12 text-muted-foreground" />
                   <p className="mt-2 text-sm text-muted-foreground">No photos added yet</p>
-                  <Button type="button" onClick={addPhoto} className="mt-4 bg-solar-yellow text-solar-dark hover:bg-solar-yellow/90">
+                  <Button type="button" onClick={addPhoto} className="mt-4 bg-solar-yellow text-foreground hover:bg-solar-yellow/90">
                     <Plus className="mr-2 h-4 w-4" />
                     Add First Photo
                   </Button>
@@ -707,7 +707,7 @@ export default function EditInstallationPage() {
           </Card>
 
           {/* Submit — same style as new form */}
-          <div className="rounded-xl border-2 border-green-200 bg-green-50/80 p-5">
+          <div className="rounded-xl border-2 border-green-200 bg-muted/50/80 p-5">
             <p className="mb-4 text-sm font-medium text-green-800">Ready? Save your changes</p>
             <div className="flex flex-wrap gap-4">
               <Button type="button" variant="outline" size="lg" onClick={() => router.push(`/installations/${id}`)}>

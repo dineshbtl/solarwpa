@@ -1,39 +1,52 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-
-function useSupabaseAuth() {
-  if (typeof window === "undefined") return null
-  try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (url && key) {
-      const { getSupabaseBrowserClient } = require("@/lib/supabase/client")
-      return getSupabaseBrowserClient()
-    }
-  } catch {
-    // env not set
-  }
-  return null
-}
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
 export default function LogoutPage() {
   const router = useRouter()
-  const supabase = useSupabaseAuth()
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let isMounted = true
+
     async function doLogout() {
-      if (supabase) await supabase.auth.signOut()
-      router.replace("/")
-      router.refresh()
+      try {
+        const supabase = getSupabaseBrowserClient()
+        
+        // Sign out with a timeout to prevent hanging
+        const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2000))
+        const signOutPromise = supabase.auth.signOut()
+        
+        await Promise.race([signOutPromise, timeoutPromise])
+        
+        // Always redirect, even if sign out failed
+        if (isMounted) {
+          router.replace("/")
+          router.refresh()
+        }
+      } catch (err) {
+        // If anything fails, still redirect to home
+        if (isMounted) {
+          router.replace("/")
+          router.refresh()
+        }
+      }
     }
+
     doLogout()
-  }, [supabase, router])
+
+    return () => {
+      isMounted = false
+    }
+  }, [router])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
-      <p className="text-muted-foreground">Signing out…</p>
+      <div className="text-center">
+        <p className="text-muted-foreground">Signing out…</p>
+      </div>
     </div>
   )
 }

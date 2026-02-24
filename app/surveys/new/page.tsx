@@ -284,7 +284,7 @@ export default function NewSurveyPage() {
           {file && file.type.startsWith("image/") && (
             <ImagePreview file={file} className="mb-3 h-24 max-w-[200px] rounded-lg border border-solar object-cover" />
           )}
-          <p className="text-sm font-medium text-solar-dark">{uploadLabels[k]}</p>
+          <p className="text-sm font-medium text-foreground">{uploadLabels[k]}</p>
           {helper && <p className="mt-1 text-xs text-muted-foreground">{helper}</p>}
           {file ? (
             <p className="mt-2 text-xs text-green-700">
@@ -334,7 +334,7 @@ export default function NewSurveyPage() {
             <Button
               type="button"
               variant="ghost"
-              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={() => setUpload(k, undefined)}
             >
               Remove
@@ -349,7 +349,7 @@ export default function NewSurveyPage() {
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <Link href="/surveys">
-          <Button variant="ghost" className="mb-6 text-solar-dark hover:bg-solar-beige">
+          <Button variant="ghost" className="mb-6 text-foreground hover:bg-accent">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Surveys
           </Button>
@@ -360,7 +360,7 @@ export default function NewSurveyPage() {
             <form onSubmit={(e) => { e.preventDefault(); form.handleSubmit(onSubmit)(); }} className="space-y-6">
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-2xl text-solar-dark">New Site Survey</CardTitle>
+              <CardTitle className="text-2xl text-foreground">New Site Survey</CardTitle>
               <p className="text-sm text-muted-foreground">Fill beneficiary, site, and document details</p>
             </CardHeader>
           </Card>
@@ -368,12 +368,12 @@ export default function NewSurveyPage() {
           {/* Beneficiary */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Beneficiary Details</CardTitle>
+              <CardTitle className="text-lg text-foreground">Beneficiary Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <p className="text-sm font-medium text-solar-dark">Surveyor (submitted by)</p>
-                <p className="text-sm text-solar-dark">{currentUser?.name ?? "—"}</p>
+                <p className="text-sm font-medium text-foreground">Surveyor (submitted by)</p>
+                <p className="text-sm text-foreground">{currentUser?.name ?? "—"}</p>
                 <p className="text-xs text-muted-foreground">The logged-in user is recorded as the submitter.</p>
               </div>
 
@@ -505,12 +505,12 @@ export default function NewSurveyPage() {
           {/* Site location fields */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Site Location</CardTitle>
+              <CardTitle className="text-lg text-foreground">Site Location</CardTitle>
               <p className="text-sm text-muted-foreground">Optional: select a project to fill district, pin code, state, city and address.</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
-                <label className="text-sm font-medium text-solar-dark">Fill from project (optional)</label>
+                <label className="text-sm font-medium text-foreground">Fill from project (optional)</label>
                 <Select value="__none__" onValueChange={handleProjectSelectForLocation}>
                   <SelectTrigger className="border-solar bg-background max-w-sm">
                     <SelectValue placeholder="Select project to fill site location" />
@@ -721,7 +721,7 @@ export default function NewSurveyPage() {
           {/* Plant & roof details */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Plant & Roof Details</CardTitle>
+              <CardTitle className="text-lg text-foreground">Plant & Roof Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -847,7 +847,7 @@ export default function NewSurveyPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-solar-dark">Meter AC Cable (m)</label>
+                  <label className="text-sm font-medium text-foreground">Meter AC Cable (m)</label>
                   <Input
                     className="border-solar bg-background"
                     type="number"
@@ -863,7 +863,7 @@ export default function NewSurveyPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-solar-dark">Meter DC Cable (m)</label>
+                  <label className="text-sm font-medium text-foreground">Meter DC Cable (m)</label>
                   <Input
                     className="border-solar bg-background"
                     type="number"
@@ -880,7 +880,7 @@ export default function NewSurveyPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-solar-dark">Slab thickness (inches)</label>
+                <label className="text-sm font-medium text-foreground">Slab thickness (inches)</label>
                 <Input
                   className="border-solar bg-background max-w-xs"
                   type="number"
@@ -901,7 +901,7 @@ export default function NewSurveyPage() {
           {/* Bank details */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Bank Details (Optional)</CardTitle>
+              <CardTitle className="text-lg text-foreground">Bank Details (Optional)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -967,7 +967,7 @@ export default function NewSurveyPage() {
           {/* Remarks (Optional) */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Remarks</CardTitle>
+              <CardTitle className="text-lg text-foreground">Remarks</CardTitle>
               <p className="text-sm text-muted-foreground">Any additional notes or observations (optional)</p>
             </CardHeader>
             <CardContent>
@@ -994,7 +994,7 @@ export default function NewSurveyPage() {
           {/* Site details (auto from GPRS Cam) */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Site Details (GPRS Cam)</CardTitle>
+              <CardTitle className="text-lg text-foreground">Site Details (GPRS Cam)</CardTitle>
               <p className="text-sm text-muted-foreground">Capture location to auto-fill site details</p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1014,7 +1014,7 @@ export default function NewSurveyPage() {
                   type="button"
                   onClick={handleCaptureLocation}
                   disabled={isCapturingLocation}
-                  className="bg-solar-yellow text-solar-dark hover:bg-solar-yellow/90"
+                  className="bg-solar-yellow text-foreground hover:bg-solar-yellow/90"
                 >
                   <MapPin className="mr-2 h-4 w-4" />
                   {isCapturingLocation ? "Capturing..." : "Capture Location"}
@@ -1036,7 +1036,7 @@ export default function NewSurveyPage() {
           {/* Uploads (optional for now) */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Uploads (Optional)</CardTitle>
+              <CardTitle className="text-lg text-foreground">Uploads (Optional)</CardTitle>
               <p className="text-sm text-muted-foreground">For now these are saved as metadata (real upload later in Supabase)</p>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -1058,7 +1058,7 @@ export default function NewSurveyPage() {
           </Card>
 
           {/* Submit — same style as installation form */}
-          <div className="rounded-xl border-2 border-green-200 bg-green-50/80 p-5">
+          <div className="rounded-xl border-2 border-green-200 bg-muted/50/80 p-5">
             <p className="mb-4 text-sm font-medium text-green-800">Ready? Submit your survey</p>
             <div className="flex flex-wrap gap-4">
               <Button
@@ -1066,7 +1066,7 @@ export default function NewSurveyPage() {
                 variant="outline"
                 size="lg"
                 onClick={() => router.push("/surveys")}
-                className="border-solar text-solar-dark"
+                className="border-solar text-foreground"
               >
                 Cancel
               </Button>

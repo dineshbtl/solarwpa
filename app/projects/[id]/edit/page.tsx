@@ -121,14 +121,14 @@ export default function EditProjectPage() {
     <div className="p-6 sm:p-8">
       <div className="mb-6">
         <Link href="/projects">
-          <Button variant="ghost" className="text-solar-dark hover:bg-solar-beige">
+          <Button variant="ghost" className="text-foreground hover:bg-accent">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Projects
           </Button>
         </Link>
       </div>
 
-      <Card className="max-w-3xl border-border bg-white shadow-sm rounded-xl">
+      <Card className="max-w-3xl border-border bg-card shadow-sm rounded-xl">
         <CardHeader>
           <CardTitle className="text-2xl text-foreground">Edit Project</CardTitle>
           <p className="text-sm text-muted-foreground">Update project details and assignments.</p>
@@ -326,10 +326,10 @@ export default function EditProjectPage() {
               </div>
 
               {/* Submit — same style as installation form */}
-              <div className="rounded-xl border-2 border-green-200 bg-green-50/80 p-5">
+              <div className="rounded-xl border-2 border-green-200 bg-muted/50/80 p-5">
                 <p className="mb-4 text-sm font-medium text-green-800">Ready? Save your changes</p>
                 <div className="flex flex-wrap gap-4">
-                  <Button type="button" variant="outline" size="lg" onClick={() => router.push("/projects")} className="border-solar text-solar-dark">
+                  <Button type="button" variant="outline" size="lg" onClick={() => router.push("/projects")} className="border-solar text-foreground">
                     Cancel
                   </Button>
                   <Button

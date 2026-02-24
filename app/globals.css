@@ -127,6 +127,8 @@
 
 body {
   overflow: hidden;
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 }
@@ -154,7 +156,7 @@ body {
   }
 
   .bg-gradient-topbar {
-    background: linear-gradient(90deg, #ffffff 0%, #f0f9f6 100%);
+    background: linear-gradient(90deg, var(--background) 0%, var(--muted) 100%);
   }
 
   .text-gradient-green {

@@ -255,7 +255,7 @@ export default function SurveyDetailPage() {
   const gpsLng = isStored ? (survey.siteDetails?.gpsLng ?? dummy.gps) : (survey.gpsLocation?.lng != null ? String(survey.gpsLocation.lng) : dummy.gps)
 
   return (
-    <div className="min-h-screen bg-white relative">
+    <div className="min-h-screen bg-background relative">
       <SolarWatermark />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 relative z-10">
         <Link href="/surveys">
@@ -271,7 +271,7 @@ export default function SurveyDetailPage() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-2xl text-solar-dark">
+                  <CardTitle className="text-2xl text-foreground">
                     {isStored ? survey.beneficiaryName : survey.customerName}
                   </CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">Survey ID: {survey.id}</p>
@@ -331,37 +331,37 @@ export default function SurveyDetailPage() {
           {/* 1. Beneficiary Details — same section order as survey form */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Beneficiary Details</CardTitle>
+              <CardTitle className="text-lg text-foreground">Beneficiary Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Surveyor (submitted by)</p>
-                  <p className="mt-1 text-sm text-solar-dark">{surveyorName}</p>
+                  <p className="mt-1 text-sm text-foreground">{surveyorName}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Name of the Beneficiary</p>
-                  <p className="mt-1 text-sm text-solar-dark">{beneficiaryName}</p>
+                  <p className="mt-1 text-sm text-foreground">{beneficiaryName}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Service No</p>
-                  <p className="mt-1 text-sm text-solar-dark">{v(isStored ? survey.serviceNo : undefined, dummy.serviceNo)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.serviceNo : undefined, dummy.serviceNo)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Aadhar No</p>
-                  <p className="mt-1 text-sm text-solar-dark">{v(isStored ? survey.aadharNo : undefined, dummy.aadhar)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.aadharNo : undefined, dummy.aadhar)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">PAN No</p>
-                  <p className="mt-1 text-sm text-solar-dark">{v(isStored ? survey.panNo : undefined, dummy.pan)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.panNo : undefined, dummy.pan)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Mobile</p>
-                  <p className="mt-1 text-sm text-solar-dark">{v(isStored ? survey.mobile : undefined, dummy.mobile)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.mobile : undefined, dummy.mobile)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Contracted Load</p>
-                  <p className="mt-1 text-sm text-solar-dark">{survey.contractedLoad != null ? String(survey.contractedLoad) : dummy.load}</p>
+                  <p className="mt-1 text-sm text-foreground">{survey.contractedLoad != null ? String(survey.contractedLoad) : dummy.load}</p>
                 </div>
               </div>
             </CardContent>
@@ -370,23 +370,23 @@ export default function SurveyDetailPage() {
           {/* 2. Site Location */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Site Location</CardTitle>
+              <CardTitle className="text-lg text-foreground">Site Location</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div><p className="text-sm font-medium text-muted-foreground">Section</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.section, dummy.section)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Sub Division</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.subDivision, dummy.subDiv)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Division</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.division, dummy.division)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Circle</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.circle, dummy.circle)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Mandal</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.mandal, dummy.mandal)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">District</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.district, dummy.district)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Pin Code</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.pinCode, dummy.pin)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">City</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.city, dummy.city)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">State</p><p className="mt-1 text-sm text-solar-dark">{v(siteLocation.state, dummy.state)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Section</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.section, dummy.section)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Sub Division</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.subDivision, dummy.subDiv)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Division</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.division, dummy.division)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Circle</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.circle, dummy.circle)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Mandal</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.mandal, dummy.mandal)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">District</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.district, dummy.district)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Pin Code</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.pinCode, dummy.pin)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">City</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.city, dummy.city)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">State</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.state, dummy.state)}</p></div>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Address of the Location</p>
-                <p className="mt-1 text-sm text-solar-dark">{v(siteLocation.address ?? (survey as any).address, dummy.address)}</p>
+                <p className="mt-1 text-sm text-foreground">{v(siteLocation.address ?? (survey as any).address, dummy.address)}</p>
               </div>
             </CardContent>
           </Card>
@@ -394,17 +394,17 @@ export default function SurveyDetailPage() {
           {/* 3. Plant & Roof Details */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Plant & Roof Details</CardTitle>
+              <CardTitle className="text-lg text-foreground">Plant & Roof Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div><p className="text-sm font-medium text-muted-foreground">Type of Solar Power Plant</p><p className="mt-1 text-sm text-solar-dark">{v(isStored ? survey.plantType : undefined, dummy.plantType)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Building Height</p><p className="mt-1 text-sm text-solar-dark">{survey.buildingHeight != null && survey.buildingHeight > 0 ? String(survey.buildingHeight) : dummy.height}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Total No of Roofs</p><p className="mt-1 text-sm text-solar-dark">{v(isStored ? survey.totalRoofs : undefined, dummy.roofs)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Type of Roof</p><p className="mt-1 text-sm text-solar-dark">{v(isStored ? survey.roofType : undefined, dummy.roofType)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">DISCOM Name</p><p className="mt-1 text-sm text-solar-dark">{v(isStored ? survey.discomName : undefined, dummy.discom)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Meter AC Cable (m)</p><p className="mt-1 text-sm text-solar-dark">{survey.siteDetails?.meterAcCableMeters != null ? String(survey.siteDetails.meterAcCableMeters) : "—"}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Meter DC Cable (m)</p><p className="mt-1 text-sm text-solar-dark">{survey.siteDetails?.meterDcCableMeters != null ? String(survey.siteDetails.meterDcCableMeters) : "—"}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Type of Solar Power Plant</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.plantType : undefined, dummy.plantType)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Building Height</p><p className="mt-1 text-sm text-foreground">{survey.buildingHeight != null && survey.buildingHeight > 0 ? String(survey.buildingHeight) : dummy.height}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Total No of Roofs</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.totalRoofs : undefined, dummy.roofs)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Type of Roof</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.roofType : undefined, dummy.roofType)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">DISCOM Name</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.discomName : undefined, dummy.discom)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Meter AC Cable (m)</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.meterAcCableMeters != null ? String(survey.siteDetails.meterAcCableMeters) : "—"}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Meter DC Cable (m)</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.meterDcCableMeters != null ? String(survey.siteDetails.meterDcCableMeters) : "—"}</p></div>
               </div>
             </CardContent>
           </Card>
@@ -412,14 +412,14 @@ export default function SurveyDetailPage() {
           {/* 4. Bank Details */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Bank Details</CardTitle>
+              <CardTitle className="text-lg text-foreground">Bank Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div><p className="text-sm font-medium text-muted-foreground">Bank Name</p><p className="mt-1 text-sm text-solar-dark">{v(bankDetails.bankName, dummy.bankName)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Branch</p><p className="mt-1 text-sm text-solar-dark">{v(bankDetails.branch, dummy.branch)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Account No</p><p className="mt-1 text-sm text-solar-dark">{v(bankDetails.accountNo, dummy.account)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">IFSC</p><p className="mt-1 text-sm text-solar-dark">{v(bankDetails.ifsc, dummy.ifsc)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Bank Name</p><p className="mt-1 text-sm text-foreground">{v(bankDetails.bankName, dummy.bankName)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Branch</p><p className="mt-1 text-sm text-foreground">{v(bankDetails.branch, dummy.branch)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Account No</p><p className="mt-1 text-sm text-foreground">{v(bankDetails.accountNo, dummy.account)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">IFSC</p><p className="mt-1 text-sm text-foreground">{v(bankDetails.ifsc, dummy.ifsc)}</p></div>
               </div>
             </CardContent>
           </Card>
@@ -427,20 +427,20 @@ export default function SurveyDetailPage() {
           {/* 5. Site Details (GPRS Cam) */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Site Details (GPRS Cam)</CardTitle>
+              <CardTitle className="text-lg text-foreground">Site Details (GPRS Cam)</CardTitle>
               <p className="text-sm text-muted-foreground">Capture location to auto-fill site details</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div><p className="text-sm font-medium text-muted-foreground">Latitude</p><p className="mt-1 text-sm text-solar-dark">{gpsLat}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Longitude</p><p className="mt-1 text-sm text-solar-dark">{gpsLng}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Latitude</p><p className="mt-1 text-sm text-foreground">{gpsLat}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Longitude</p><p className="mt-1 text-sm text-foreground">{gpsLng}</p></div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div><p className="text-sm font-medium text-muted-foreground">GPS Accuracy (m)</p><p className="mt-1 text-sm text-solar-dark">{survey.siteDetails?.accuracyMeters != null ? String(survey.siteDetails.accuracyMeters) : dummy.gps}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Captured At</p><p className="mt-1 text-sm text-solar-dark">{survey.siteDetails?.capturedAt ? new Date(survey.siteDetails.capturedAt).toLocaleString() : dummy.captured}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">GPS Accuracy (m)</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.accuracyMeters != null ? String(survey.siteDetails.accuracyMeters) : dummy.gps}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Captured At</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.capturedAt ? new Date(survey.siteDetails.capturedAt).toLocaleString() : dummy.captured}</p></div>
               </div>
               {gpsLat !== dummy.gps && gpsLng !== dummy.gps ? (
-                <Button variant="outline" size="sm" className="border-solar text-solar-dark bg-transparent" asChild>
+                <Button variant="outline" size="sm" className="border-solar text-foreground bg-transparent" asChild>
                   <a
                     href={`https://www.google.com/maps?q=${encodeURIComponent(gpsLat)},${encodeURIComponent(gpsLng)}`}
                     target="_blank"
@@ -451,7 +451,7 @@ export default function SurveyDetailPage() {
                   </a>
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" className="border-solar text-solar-dark bg-transparent" disabled>
+                <Button variant="outline" size="sm" className="border-solar text-foreground bg-transparent" disabled>
                   <MapPin className="mr-2 h-4 w-4" />
                   Site navigation (capture GPS first)
                 </Button>
@@ -462,7 +462,7 @@ export default function SurveyDetailPage() {
           {/* 6. Uploads (Optional) */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Uploads (Optional)</CardTitle>
+              <CardTitle className="text-lg text-foreground">Uploads (Optional)</CardTitle>
               <p className="text-sm text-muted-foreground">Aadhar, PAN, Bank Proof, E-Bill, Beneficiary Photo, Site Layout, Site Photos</p>
             </CardHeader>
             <CardContent>
@@ -516,7 +516,7 @@ export default function SurveyDetailPage() {
                         )}
                       </div>
                       <div className="p-3 border-t border-solar">
-                        <p className="text-sm font-medium text-solar-dark">{label}</p>
+                        <p className="text-sm font-medium text-foreground">{label}</p>
                         <p className="text-xs text-muted-foreground truncate">{fileName ?? "—"}</p>
                       </div>
                     </div>
@@ -529,7 +529,7 @@ export default function SurveyDetailPage() {
           {isStored && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Workflow</CardTitle>
+                <CardTitle className="text-lg text-foreground">Workflow</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
@@ -565,7 +565,7 @@ export default function SurveyDetailPage() {
                       </SelectContent>
                     </Select>
                   ) : (
-                    <p className="mt-1 text-sm font-medium text-solar-dark capitalize">{survey.status}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground capitalize">{survey.status}</p>
                   )}
                   <p className="text-xs text-muted-foreground">
                     Upload Date: {survey.uploadDate ? new Date(survey.uploadDate).toLocaleString() : "-"}
@@ -628,12 +628,12 @@ export default function SurveyDetailPage() {
           {isStored && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Linked Records</CardTitle>
+                <CardTitle className="text-lg text-foreground">Linked Records</CardTitle>
                 <p className="text-sm text-muted-foreground">Quick navigation across workflow</p>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-lg border border-solar bg-background p-4">
-                  <p className="text-sm font-medium text-solar-dark">Installation</p>
+                  <p className="text-sm font-medium text-foreground">Installation</p>
                   <p className="mt-1 text-sm text-muted-foreground">{linkedInstallation ? linkedInstallation.id : "Not created"}</p>
                   <div className="mt-3 flex gap-2">
                     <Button
@@ -648,7 +648,7 @@ export default function SurveyDetailPage() {
                 </div>
 
                 <div className="rounded-lg border border-solar bg-background p-4">
-                  <p className="text-sm font-medium text-solar-dark">Inspection</p>
+                  <p className="text-sm font-medium text-foreground">Inspection</p>
                   <p className="mt-1 text-sm text-muted-foreground">{linkedInspection ? linkedInspection.id : "Not submitted"}</p>
                   <div className="mt-3 flex gap-2">
                     <Button
@@ -669,35 +669,35 @@ export default function SurveyDetailPage() {
           {isStored && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Assigned People &amp; Roles</CardTitle>
+                <CardTitle className="text-lg text-foreground">Assigned People &amp; Roles</CardTitle>
                 <p className="text-sm text-muted-foreground">Manager, Surveyor, Installer and Inspection details with name, role and contact</p>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-lg border border-solar bg-background p-4">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Manager</p>
-                    <p className="mt-1 text-sm font-medium text-solar-dark">{managerUser?.name ?? "—"}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{managerUser?.name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground capitalize">{managerUser?.role ?? "—"}</p>
                     <p className="mt-1 text-xs text-muted-foreground">ID: {managerUser?.id ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">{managerUser?.email ?? "—"}</p>
                   </div>
                   <div className="rounded-lg border border-solar bg-background p-4">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Surveyor</p>
-                    <p className="mt-1 text-sm font-medium text-solar-dark">{surveyorUser?.name ?? "—"}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{surveyorUser?.name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground capitalize">{surveyorUser?.role ?? "—"}</p>
                     <p className="mt-1 text-xs text-muted-foreground">ID: {surveyorUser?.id ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">{surveyorUser?.email ?? "—"}</p>
                   </div>
                   <div className="rounded-lg border border-solar bg-background p-4">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Installer (Engineer)</p>
-                    <p className="mt-1 text-sm font-medium text-solar-dark">{installerUser?.name ?? "—"}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{installerUser?.name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground capitalize">{installerUser?.role ?? "—"}</p>
                     <p className="mt-1 text-xs text-muted-foreground">ID: {installerUser?.id ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">{installerUser?.email ?? "—"}</p>
                   </div>
                   <div className="rounded-lg border border-solar bg-background p-4">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inspection (Inspector)</p>
-                    <p className="mt-1 text-sm font-medium text-solar-dark">{inspectorNameDisplay ?? (inspectorUser?.name ?? "—")}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{inspectorNameDisplay ?? (inspectorUser?.name ?? "—")}</p>
                     <p className="text-xs text-muted-foreground capitalize">{inspectorUser ? inspectorUser.role : "—"}</p>
                     <p className="mt-1 text-xs text-muted-foreground">ID: {inspectorUser?.id ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">{inspectorUser?.email ?? "—"}</p>
@@ -711,7 +711,7 @@ export default function SurveyDetailPage() {
           {isStored && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Activity Log</CardTitle>
+                <CardTitle className="text-lg text-foreground">Activity Log</CardTitle>
                 <p className="text-sm text-muted-foreground">Who did what and when — with name and role</p>
               </CardHeader>
               <CardContent>
@@ -728,7 +728,7 @@ export default function SurveyDetailPage() {
                           <div key={idx} className="flex gap-3 rounded-lg border border-solar bg-background p-3">
                             <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-solar-yellow" />
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm text-solar-dark">
+                              <p className="text-sm text-foreground">
                                 <span className="font-medium">{actorName}</span>
                                 {actorRole && <span className="text-muted-foreground"> ({actorRole})</span>}
                                 {" — "}
@@ -758,10 +758,10 @@ export default function SurveyDetailPage() {
           {!isStored && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Survey Notes</CardTitle>
+                <CardTitle className="text-lg text-foreground">Survey Notes</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-solar-dark">{survey.notes ?? "-"}</p>
+                <p className="text-sm text-foreground">{survey.notes ?? "-"}</p>
               </CardContent>
             </Card>
           )}
@@ -770,12 +770,12 @@ export default function SurveyDetailPage() {
           {canApproveSurveys && survey.status === "pending" && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Manager Approval</CardTitle>
+                <CardTitle className="text-lg text-foreground">Manager Approval</CardTitle>
                 <p className="text-sm text-muted-foreground">Approve or reject this survey (manager only)</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-solar-dark">Remarks</label>
+                  <label className="text-sm font-medium text-foreground">Remarks</label>
                   <Textarea
                     placeholder="Add remarks or feedback..."
                     value={remarks}
@@ -792,7 +792,7 @@ export default function SurveyDetailPage() {
                   <Button
                     onClick={handleReject}
                     variant="outline"
-                    className="flex-1 border-red-600 text-red-600 hover:bg-red-50 bg-transparent"
+                    className="flex-1 border-red-600 text-destructive hover:bg-destructive/10 bg-transparent"
                   >
                     <XCircle className="mr-2 h-4 w-4" />
                     Reject Survey

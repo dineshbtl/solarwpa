@@ -10,45 +10,66 @@ import { mockInspections, mockInstallations } from "@/lib/mock-data"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
-import { assignInspectionInspector, getInspectionById, setGovernmentInspection } from "@/lib/store/inspections"
-import { getInstallationById } from "@/lib/store/installations"
-import { getSurveyById } from "@/lib/store/surveys"
+import * as inspectionsData from "@/lib/data/inspections"
+import * as installationsData from "@/lib/data/installations"
+import * as surveysData from "@/lib/data/surveys"
 import { getUserById, listUsers, seedUsers } from "@/lib/store/users"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { WorkflowSummarySection } from "@/components/workflow-summary-section"
+import { useRole } from "@/contexts/role-context"
 
 export default function InspectionDetailPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const id = params?.id
+  const { role, currentUser } = useRole()
   const [govRemarks, setGovRemarks] = useState("")
   const [inspection, setInspection] = useState<any>(null)
   const [installation, setInstallation] = useState<any>(null)
+  const [linkedSurvey, setLinkedSurvey] = useState<any>(null)
   const [isStored, setIsStored] = useState(false)
   const [inspectorId, setInspectorId] = useState<string>("__none__")
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     seedUsers()
-    if (!id) return
-    const storedInspection = getInspectionById(id)
-    if (storedInspection) {
-      setInspection(storedInspection)
-      setIsStored(true)
-      setInspectorId(storedInspection.inspectorId ?? "__none__")
-      const storedInstallation = getInstallationById(storedInspection.installationId)
-      setInstallation(storedInstallation ?? null)
-      return
+    const loadData = async () => {
+      if (!id) return
+      try {
+        // Try to get from data layer (localStorage or Supabase)
+        const storedInspection = await inspectionsData.getInspectionById(id)
+        if (storedInspection) {
+          setInspection(storedInspection)
+          setIsStored(true)
+          setInspectorId(storedInspection.inspectorId ?? "__none__")
+          const storedInstallation = await installationsData.getInstallationById(storedInspection.installationId)
+          setInstallation(storedInstallation ?? null)
+          // Load linked survey
+          const surveyId = storedInstallation?.surveyId ?? storedInspection.surveyId
+          if (surveyId) {
+            const survey = await surveysData.getSurveyById(surveyId)
+            setLinkedSurvey(survey ?? null)
+          }
+          setLoading(false)
+          return
+        }
+        // Fall back to mock data
+        const foundInspection = mockInspections.find((i) => i.id === id)
+        if (foundInspection) {
+          setInspection(foundInspection)
+          const foundInstallation = mockInstallations.find((inst) => inst.id === foundInspection.installationId)
+          setInstallation(foundInstallation)
+          setIsStored(false)
+        }
+      } catch (e) {
+        console.error("Error loading inspection:", e)
+      }
+      setLoading(false)
     }
-    const foundInspection = mockInspections.find((i) => i.id === id)
-    if (foundInspection) {
-      setInspection(foundInspection)
-      const foundInstallation = mockInstallations.find((inst) => inst.id === foundInspection.installationId)
-      setInstallation(foundInstallation)
-      setIsStored(false)
-    }
+    loadData()
   }, [id])
 
-  if (!inspection || !installation) {
+  if (loading || !inspection || !installation) {
     return (
       <div className="min-h-screen bg-gradient-dark-green relative">
         <SolarWatermark />
@@ -59,7 +80,6 @@ export default function InspectionDetailPage() {
     )
   }
 
-  const linkedSurvey = (installation.surveyId ?? inspection.surveyId) ? getSurveyById(installation.surveyId ?? inspection.surveyId ?? "") : null
   const approvedByEvent = linkedSurvey && Array.isArray(linkedSurvey.activity)
     ? linkedSurvey.activity.find((e: any) => e.action === "status_changed" && (e.meta as any)?.status === "approved")
     : null
@@ -67,57 +87,67 @@ export default function InspectionDetailPage() {
   const inspectorUser = inspection.inspectorId ? getUserById(inspection.inspectorId) : null
   const inspectorNameDisplay = inspection.governmentInspection?.inspectorName ?? inspectorUser?.name
 
-  const handleAssignInspector = (value: string) => {
+  const handleAssignInspector = async (value: string) => {
     if (!isStored) {
       toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated." })
       return
     }
     if (!id) return
-    const nextId = value === "__none__" ? undefined : value
-    const updated = assignInspectionInspector(id, nextId)
-    setInspection(updated)
-    setInspectorId(value)
-    toast({ title: "Inspector assigned" })
+    try {
+      const nextId = value === "__none__" ? undefined : value
+      const updated = await inspectionsData.assignInspectionInspector(id, nextId)
+      setInspection(updated)
+      setInspectorId(value)
+      toast({ title: "Inspector assigned" })
+    } catch (e) {
+      toast({ title: "Failed to assign inspector", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })
+    }
   }
 
-  const handleGovApprove = () => {
+  const handleGovApprove = async () => {
     if (!govRemarks) {
       toast({ title: "Remarks required", description: "Please provide inspection remarks.", variant: "destructive" })
       return
     }
-    if (isStored) {
+    if (!isStored) {
+      toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated.", variant: "destructive" })
+      return
+    }
+    try {
       if (!id) return
       const actorName = inspection.inspectorId ? getUserById(inspection.inspectorId)?.name : undefined
-      const updated = setGovernmentInspection(id, true, govRemarks, actorName ?? "Inspector")
+      const updated = await inspectionsData.setGovernmentInspection(id, true, govRemarks, actorName ?? "Inspector")
       setInspection(updated)
       toast({ title: "Government approved", description: "Project completed." })
       router.push("/inspections")
-      return
+    } catch (e) {
+      toast({ title: "Failed to approve", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })
     }
-    toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated." })
-    router.push("/inspections")
   }
 
-  const handleGovReject = () => {
+  const handleGovReject = async () => {
     if (!govRemarks) {
       toast({ title: "Remarks required", description: "Please provide remarks for rejection.", variant: "destructive" })
       return
     }
-    if (isStored) {
+    if (!isStored) {
+      toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated.", variant: "destructive" })
+      return
+    }
+    try {
       if (!id) return
       const actorName = inspection.inspectorId ? getUserById(inspection.inspectorId)?.name : undefined
-      const updated = setGovernmentInspection(id, false, govRemarks, actorName ?? "Inspector")
+      const updated = await inspectionsData.setGovernmentInspection(id, false, govRemarks, actorName ?? "Inspector")
       setInspection(updated)
       toast({ title: "Government rejected", description: "Inspection reopened for corrections." })
       router.push("/inspections")
-      return
+    } catch (e) {
+      toast({ title: "Failed to reject", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" })
     }
-    toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated." })
-    router.push("/inspections")
   }
 
   return (
-    <div className="min-h-screen bg-white relative">
+    <div className="min-h-screen bg-background relative">
       <SolarWatermark />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 relative z-10">
         <Link href="/inspections">
@@ -133,7 +163,7 @@ export default function InspectionDetailPage() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-2xl text-solar-dark">{inspection.customerName}</CardTitle>
+                  <CardTitle className="text-2xl text-foreground">{inspection.customerName}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">Inspection ID: {inspection.id}</p>
                 </div>
                 <span
@@ -189,7 +219,7 @@ export default function InspectionDetailPage() {
           {isStored && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Inspector Assignment</CardTitle>
+                <CardTitle className="text-lg text-foreground">Inspector Assignment</CardTitle>
                 <p className="text-sm text-muted-foreground">Assign a govt-role user to approve/reject</p>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -219,32 +249,32 @@ export default function InspectionDetailPage() {
           {/* Installation Reference */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Installation Details</CardTitle>
+              <CardTitle className="text-lg text-foreground">Installation Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Address</p>
-                  <p className="mt-1 text-sm text-solar-dark">{inspection.address}</p>
+                  <p className="mt-1 text-sm text-foreground">{inspection.address}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Installation ID</p>
-                  <p className="mt-1 text-sm text-solar-dark">{inspection.installationId}</p>
+                  <p className="mt-1 text-sm text-foreground">{inspection.installationId}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Project ID</p>
-                  <p className="mt-1 text-sm text-solar-dark">{inspection.projectId}</p>
+                  <p className="mt-1 text-sm text-foreground">{inspection.projectId}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Inspection Date</p>
-                  <p className="mt-1 text-sm text-solar-dark">
+                  <p className="mt-1 text-sm text-foreground">
                     {new Date(inspection.createdAt).toLocaleDateString("en-IN")}
                   </p>
                 </div>
               </div>
               <div className="pt-2">
                 <Link href={`/installations/${inspection.installationId}`}>
-                  <Button variant="outline" size="sm" className="border-solar text-solar-dark bg-transparent">
+                  <Button variant="outline" size="sm" className="border-solar text-foreground bg-transparent">
                     View Full Installation Details
                   </Button>
                 </Link>
@@ -255,28 +285,32 @@ export default function InspectionDetailPage() {
           {/* Installation Photos */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg text-solar-dark">Installation Photos</CardTitle>
+              <CardTitle className="text-lg text-foreground">Installation Photos</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {installation.installationImages.map((image) => (
-                  <div key={image.id} className="space-y-2">
-                    <div className="overflow-hidden rounded-lg border border-solar">
-                      <img
-                        src={image.url || "/placeholder.svg"}
-                        alt={image.description}
-                        className="h-64 w-full object-cover"
-                      />
+              {(installation.photos && installation.photos.length > 0) || (installation.installationImages && installation.installationImages.length > 0) ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {((installation.photos || installation.installationImages) as Array<{id?: string, url?: string, description?: string, category?: string}>).map((image: any, idx: number) => (
+                    <div key={image.id || idx} className="space-y-2">
+                      <div className="overflow-hidden rounded-lg border border-solar">
+                        <img
+                          src={image.url || "/placeholder.svg"}
+                          alt={image.description || "Installation photo"}
+                          className="h-64 w-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <span className="inline-flex items-center rounded-full bg-solar-yellow px-2 py-1 text-xs font-medium text-foreground">
+                          {(image.category ?? "").replace(/_/g, " ") || "photo"}
+                        </span>
+                        <p className="mt-1 text-sm text-muted-foreground">{image.description || "-"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="inline-flex items-center rounded-full bg-solar-yellow px-2 py-1 text-xs font-medium text-solar-dark">
-                        {image.category.replace("_", " ")}
-                      </span>
-                      <p className="mt-1 text-sm text-muted-foreground">{image.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="py-6 text-center text-sm text-muted-foreground">No photos available.</p>
+              )}
             </CardContent>
           </Card>
 
@@ -284,8 +318,8 @@ export default function InspectionDetailPage() {
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <CheckCircle className={`h-5 w-5 ${inspection.governmentInspection?.approved ? "text-green-600" : "text-gray-300"}`} />
-                <CardTitle className="text-lg text-solar-dark">Inspection Decision</CardTitle>
+                <CheckCircle className={`h-5 w-5 ${inspection.governmentInspection?.approved ? "text-green-600" : "text-muted-foreground300"}`} />
+                <CardTitle className="text-lg text-foreground">Inspection Decision</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
@@ -302,19 +336,19 @@ export default function InspectionDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Inspector</p>
-                    <p className="mt-1 text-sm text-solar-dark">
+                    <p className="mt-1 text-sm text-foreground">
                       {inspection.governmentInspection.inspectorName || (inspection.inspectorId ? getUserById(inspection.inspectorId)?.name : "-")}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Date</p>
-                    <p className="mt-1 text-sm text-solar-dark">
+                    <p className="mt-1 text-sm text-foreground">
                       {inspection.governmentInspection.inspectedAt ? new Date(inspection.governmentInspection.inspectedAt).toLocaleDateString("en-IN") : "-"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Remarks</p>
-                    <p className="mt-1 text-sm text-solar-dark">{inspection.governmentInspection.remarks}</p>
+                    <p className="mt-1 text-sm text-foreground">{inspection.governmentInspection.remarks}</p>
                   </div>
                 </div>
               ) : (
@@ -324,7 +358,7 @@ export default function InspectionDetailPage() {
                     <p className="text-sm text-blue-800">Pending inspection decision</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-solar-dark">Inspection Remarks</label>
+                    <label className="text-sm font-medium text-foreground">Inspection Remarks</label>
                     <Textarea
                       placeholder="Add inspection remarks..."
                       value={govRemarks}
@@ -341,7 +375,7 @@ export default function InspectionDetailPage() {
                     <Button
                       onClick={handleGovReject}
                       variant="outline"
-                      className="flex-1 border-red-600 text-red-600 hover:bg-red-50 bg-transparent"
+                      className="flex-1 border-red-600 text-destructive hover:bg-destructive/10 bg-transparent"
                     >
                       <XCircle className="mr-2 h-4 w-4" />
                       Reject
@@ -356,7 +390,7 @@ export default function InspectionDetailPage() {
           {isStored && Array.isArray(inspection.activity) && inspection.activity.length > 0 && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
-                <CardTitle className="text-lg text-solar-dark">Activity Log</CardTitle>
+                <CardTitle className="text-lg text-foreground">Activity Log</CardTitle>
                 <p className="text-sm text-muted-foreground">Who did what and when</p>
               </CardHeader>
               <CardContent>
@@ -370,7 +404,7 @@ export default function InspectionDetailPage() {
                         <div key={idx} className="flex gap-3 rounded-lg border border-solar bg-background p-3">
                           <div className="mt-1 h-2 w-2 rounded-full bg-solar-yellow" />
                           <div className="min-w-0">
-                            <p className="text-sm text-solar-dark">
+                            <p className="text-sm text-foreground">
                               <span className="font-medium">{actor}</span> — {evt.message}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">

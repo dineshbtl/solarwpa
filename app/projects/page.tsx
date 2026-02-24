@@ -43,7 +43,6 @@ export default function ProjectsPage() {
       return {
         id: p.id,
         projectName: p.projectName,
-        customerName: p.customerName,
         description: p.description,
         state: p.state,
         city: p.city,
@@ -76,15 +75,15 @@ export default function ProjectsPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
-        return "bg-green-100 text-green-800"
+        return "bg-green-500/20 text-green-400"
       case "inspection":
-        return "bg-blue-100 text-blue-800"
+        return "bg-blue-500/20 text-blue-400"
       case "installation":
-        return "bg-purple-100 text-purple-800"
+        return "bg-purple-500/20 text-purple-400"
       case "survey":
-        return "bg-yellow-100 text-yellow-800"
+        return "bg-yellow-500/20 text-yellow-400"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "bg-muted text-muted-foreground800"
     }
   }
 
@@ -141,10 +140,10 @@ export default function ProjectsPage() {
       </div>
 
       <div className="mb-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="overflow-hidden rounded-xl border-0 shadow-lg transition-all hover:shadow-xl hover:scale-105">
+        <Card className="overflow-hidden rounded-xl border border-border shadow-lg transition-all hover:shadow-xl hover:scale-105">
           <div className="bg-gradient-dark-green p-6 h-full">
             <div className="flex items-center justify-between mb-4">
-              <div className="rounded-xl bg-white/20 backdrop-blur-sm p-3">
+              <div className="rounded-xl bg-background/20 backdrop-blur-sm p-3">
                 <Folder className="h-8 w-8 text-white" />
               </div>
               <div className="flex items-center gap-1 text-green-100 text-xs font-medium">
@@ -159,10 +158,10 @@ export default function ProjectsPage() {
           </div>
         </Card>
 
-        <Card className="overflow-hidden rounded-xl border-0 shadow-lg transition-all hover:shadow-xl hover:scale-105">
+        <Card className="overflow-hidden rounded-xl border border-border shadow-lg transition-all hover:shadow-xl hover:scale-105">
           <div className="bg-gradient-to-br from-emerald-600 to-green-700 p-6 h-full">
             <div className="flex items-center justify-between mb-4">
-              <div className="rounded-xl bg-white/20 backdrop-blur-sm p-3">
+              <div className="rounded-xl bg-background/20 backdrop-blur-sm p-3">
                 <ClipboardList className="h-8 w-8 text-white" />
               </div>
               <div className="flex items-center gap-1 text-emerald-100 text-xs font-medium">
@@ -179,10 +178,10 @@ export default function ProjectsPage() {
           </div>
         </Card>
 
-        <Card className="overflow-hidden rounded-xl border-0 shadow-lg transition-all hover:shadow-xl hover:scale-105">
+        <Card className="overflow-hidden rounded-xl border border-border shadow-lg transition-all hover:shadow-xl hover:scale-105">
           <div className="bg-gradient-to-br from-teal-600 to-emerald-700 p-6 h-full">
             <div className="flex items-center justify-between mb-4">
-              <div className="rounded-xl bg-white/20 backdrop-blur-sm p-3">
+              <div className="rounded-xl bg-background/20 backdrop-blur-sm p-3">
                 <Zap className="h-8 w-8 text-white" />
               </div>
               <div className="flex items-center gap-1 text-teal-100 text-xs font-medium">
@@ -199,10 +198,10 @@ export default function ProjectsPage() {
           </div>
         </Card>
 
-        <Card className="overflow-hidden rounded-xl border-0 shadow-lg transition-all hover:shadow-xl hover:scale-105">
+        <Card className="overflow-hidden rounded-xl border border-border shadow-lg transition-all hover:shadow-xl hover:scale-105">
           <div className="bg-gradient-to-br from-green-700 to-emerald-800 p-6 h-full">
             <div className="flex items-center justify-between mb-4">
-              <div className="rounded-xl bg-white/20 backdrop-blur-sm p-3">
+              <div className="rounded-xl bg-background/20 backdrop-blur-sm p-3">
                 <CheckCircle className="h-8 w-8 text-white" />
               </div>
               <div className="flex items-center gap-1 text-green-100 text-xs font-medium">
@@ -230,7 +229,7 @@ export default function ProjectsPage() {
           return (
             <Card
               key={project.id}
-              className="overflow-hidden rounded-xl border-0 shadow-sm transition-all hover:shadow-md"
+              className="overflow-hidden rounded-xl border border-border shadow-sm transition-all hover:shadow-md"
             >
               <CardHeader className="border-b border-border pb-4">
                 <div className="flex items-start justify-between">
@@ -251,12 +250,12 @@ export default function ProjectsPage() {
                       {(manager || surveyor) && (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {manager && (
-                            <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                            <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
                               Manager: {manager.name}
                             </Badge>
                           )}
                           {surveyor && (
-                            <Badge variant="secondary" className="bg-amber-50 text-amber-800 border-amber-200">
+                            <Badge variant="secondary" className="bg-amber-500/20 text-amber-400 border-amber-500/30">
                               Surveyor: {surveyor.name}
                             </Badge>
                           )}
@@ -293,7 +292,7 @@ export default function ProjectsPage() {
                 <div className="flex flex-wrap gap-3 mb-4">
                   {(project.survey || (project.surveyCount ?? 0) > 0) && (
                     <Link href={project.survey ? `/surveys/${project.survey.id}` : `/surveys?project=${project.id}`}>
-                      <Card className="cursor-pointer overflow-hidden rounded-lg border-0 shadow-sm transition-all hover:shadow-md hover:bg-muted">
+                      <Card className="cursor-pointer overflow-hidden rounded-lg border border-border shadow-sm transition-all hover:shadow-md hover:bg-muted">
                         <CardContent className="p-4">
                           <p className="text-xs font-medium text-muted-foreground">Survey{((project.surveyCount ?? 0) > 1) ? `s` : ""}</p>
                           <p className="mt-2 font-semibold text-foreground">
@@ -320,7 +319,7 @@ export default function ProjectsPage() {
 
                   {project.installation && (
                     <Link href={`/installations/${project.installation.id}`}>
-                      <Card className="cursor-pointer overflow-hidden rounded-lg border-0 shadow-sm transition-all hover:shadow-md hover:bg-muted">
+                      <Card className="cursor-pointer overflow-hidden rounded-lg border border-border shadow-sm transition-all hover:shadow-md hover:bg-muted">
                         <CardContent className="p-4">
                           <p className="text-xs font-medium text-muted-foreground">Installation</p>
                           <p className="mt-2 font-semibold text-foreground">{project.installation.id}</p>
@@ -343,7 +342,7 @@ export default function ProjectsPage() {
 
                   {project.inspection && (
                     <Link href={`/inspections/${project.inspection.id}`}>
-                      <Card className="cursor-pointer overflow-hidden rounded-lg border-0 shadow-sm transition-all hover:shadow-md hover:bg-muted">
+                      <Card className="cursor-pointer overflow-hidden rounded-lg border border-border shadow-sm transition-all hover:shadow-md hover:bg-muted">
                         <CardContent className="p-4">
                           <p className="text-xs font-medium text-muted-foreground">Inspection</p>
                           <p className="mt-2 font-semibold text-foreground">{project.inspection.id}</p>

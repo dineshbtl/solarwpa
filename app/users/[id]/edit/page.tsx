@@ -18,11 +18,13 @@ import type { Role } from "@/lib/rbac"
 import { roleLabel } from "@/lib/rbac"
 import {
   UpdateUserSchema,
+  type UpdateUserInput,
+} from "@/lib/store/users"
+import {
   getUserById,
   updateUser,
   seedUsers,
-  type UpdateUserInput,
-} from "@/lib/store/users"
+} from "@/lib/data/users"
 
 type FormValues = UpdateUserInput & { password?: string }
 
@@ -54,31 +56,32 @@ export default function EditUserPage() {
   useEffect(() => {
     seedUsers()
     if (!id) return
-    const u = getUserById(id)
-    if (!u) {
-      setNotFound(true)
+    getUserById(id).then((u) => {
+      if (!u) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
+      form.reset({
+        name: u.name,
+        email: u.email,
+        password: "",
+        role: u.role,
+        status: u.status ?? "active",
+        phone: u.phone ?? "",
+        aadharNo: u.aadharNo ?? "",
+        city: u.city ?? "",
+        state: u.state ?? "",
+        district: u.district ?? "",
+        fullAddress: u.fullAddress ?? "",
+      })
       setLoading(false)
-      return
-    }
-    form.reset({
-      name: u.name,
-      email: u.email,
-      password: "",
-      role: u.role,
-      status: u.status ?? "active",
-      phone: u.phone ?? "",
-      aadharNo: u.aadharNo ?? "",
-      city: u.city ?? "",
-      state: u.state ?? "",
-      district: u.district ?? "",
-      fullAddress: u.fullAddress ?? "",
     })
-    setLoading(false)
   }, [id, form])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const onSubmit = (values: FormValues) => {
+  const onSubmit = async (values: FormValues) => {
     if (!id) return
     setIsSubmitting(true)
     try {
@@ -97,7 +100,7 @@ export default function EditUserPage() {
       if (values.password && values.password.trim() !== "") {
         payload.password = values.password
       }
-      const updated = updateUser(id, payload)
+      const updated = await updateUser(id, payload)
       toast({
         title: "User updated",
         description: `${updated.name} (${roleLabel(updated.role)}) was updated.`,
@@ -137,14 +140,14 @@ export default function EditUserPage() {
     <div className="p-6 sm:p-8">
       <div className="mb-6">
         <Link href={id ? `/users/${id}` : "/users"}>
-          <Button variant="ghost" className="text-solar-dark hover:bg-solar-beige">
+          <Button variant="ghost" className="text-foreground hover:bg-accent">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to User
           </Button>
         </Link>
       </div>
 
-      <Card className="max-w-2xl border-border bg-white shadow-sm rounded-xl">
+      <Card className="max-w-2xl border-border bg-card shadow-sm rounded-xl">
         <CardHeader>
           <CardTitle className="text-2xl text-foreground">Edit User</CardTitle>
           <p className="text-sm text-muted-foreground">Update full name, email, password (optional), role, address and status.</p>
@@ -327,10 +330,10 @@ export default function EditUserPage() {
               />
 
               {/* Submit — same style as installation form */}
-              <div className="rounded-xl border-2 border-green-200 bg-green-50/80 p-5">
+              <div className="rounded-xl border-2 border-green-200 bg-muted/50/80 p-5">
                 <p className="mb-4 text-sm font-medium text-green-800">Ready? Save your changes</p>
                 <div className="flex flex-wrap gap-4">
-                  <Button type="button" variant="outline" size="lg" onClick={() => router.push(`/users/${id}`)} className="border-solar text-solar-dark">
+                  <Button type="button" variant="outline" size="lg" onClick={() => router.push(`/users/${id}`)} className="border-solar text-foreground">
                     Cancel
                   </Button>
                   <Button

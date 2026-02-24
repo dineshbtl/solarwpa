@@ -104,15 +104,16 @@ export default function LoginPage() {
       {/* Animated Solar Background */}
       <div className="absolute inset-0 overflow-hidden">
         {/* Animated Sun */}
-        <div className="absolute top-20 right-20 w-32 h-32 animate-pulse">
+        <div className="absolute top-20 right-20 w-36 h-36 animate-pulse">
           <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full animate-spin-slow" />
-            <div className="absolute inset-2 bg-gradient-to-br from-yellow-200 to-yellow-400 rounded-full" />
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-400 via-orange-400 to-amber-500 rounded-full animate-spin-slow" />
+            <div className="absolute inset-2 bg-gradient-to-br from-amber-300 to-orange-400 rounded-full" />
+            <div className="absolute inset-4 bg-gradient-to-br from-white/30 to-transparent rounded-full" />
             {/* Sun Rays */}
             {[...Array(8)].map((_, i) => (
               <div
                 key={i}
-                className="absolute top-1/2 left-1/2 w-1 h-16 bg-gradient-to-t from-yellow-300/50 to-transparent origin-bottom"
+                className="absolute top-1/2 left-1/2 w-1.5 h-16 bg-gradient-to-t from-amber-400/50 via-yellow-300/25 to-transparent origin-bottom"
                 style={{
                   transform: `translate(-50%, -100%) rotate(${i * 45}deg)`,
                 }}
@@ -121,66 +122,100 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Solar Panels */}
+        {/* Light rays effect - subtle and professional */}
+        <div className="absolute top-0 right-0 w-full h-full pointer-events-none">
+          <div className="absolute top-16 right-10 w-[400px] h-[400px] bg-gradient-to-br from-amber-100/15 via-orange-50/10 to-transparent rounded-full blur-3xl" />
+        </div>
+
+        {/* Solar Panels - Professional muted blue-gray */}
         <div className="absolute bottom-32 left-20 space-y-4 animate-float">
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="w-20 h-24 bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg shadow-lg border-2 border-slate-600 relative overflow-hidden"
+                className="w-20 h-24 bg-gradient-to-br from-slate-600 via-slate-700 to-slate-800 rounded-lg shadow-lg border-2 border-slate-500/40 relative overflow-hidden"
                 style={{
                   animationDelay: `${i * 0.2}s`,
                 }}
               >
-                <div className="absolute inset-0 grid grid-cols-2 gap-[2px] p-1">
+                {/* Panel frame */}
+                <div className="absolute inset-0 border-[3px] border-slate-900/50 rounded-lg" />
+                {/* Grid cells - subtle blue tint */}
+                <div className="absolute inset-2 grid grid-cols-2 gap-[2px] p-0.5">
                   {[...Array(6)].map((_, j) => (
-                    <div key={j} className="bg-blue-900/30 rounded-sm" />
+                    <div 
+                      key={j} 
+                      className="bg-slate-800/50 rounded-sm"
+                    />
                   ))}
                 </div>
+                {/* Subtle shine */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-lg" />
               </div>
             ))}
           </div>
         </div>
 
         <div className="absolute top-40 left-1/4 space-y-4 animate-float" style={{ animationDelay: "1s" }}>
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             {[...Array(2)].map((_, i) => (
               <div
                 key={i}
-                className="w-16 h-20 bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg shadow-lg border-2 border-slate-600 relative overflow-hidden"
+                className="w-16 h-20 bg-gradient-to-br from-slate-600 via-slate-700 to-slate-800 rounded-lg shadow-lg border-2 border-slate-500/40 relative overflow-hidden"
               >
-                <div className="absolute inset-0 grid grid-cols-2 gap-[2px] p-1">
+                <div className="absolute inset-0 border-[3px] border-slate-900/50 rounded-lg" />
+                <div className="absolute inset-2 grid grid-cols-2 gap-[2px] p-0.5">
                   {[...Array(4)].map((_, j) => (
-                    <div key={j} className="bg-blue-900/30 rounded-sm" />
+                    <div 
+                      key={j} 
+                      className="bg-slate-800/50 rounded-sm"
+                    />
                   ))}
                 </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-lg" />
               </div>
             ))}
           </div>
         </div>
 
         <div className="absolute bottom-40 right-32 space-y-4 animate-float" style={{ animationDelay: "0.5s" }}>
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             {[...Array(4)].map((_, i) => (
               <div
                 key={i}
-                className="w-16 h-20 bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg shadow-lg border-2 border-slate-600 relative overflow-hidden"
+                className="w-14 h-18 bg-gradient-to-br from-slate-600 via-slate-700 to-slate-800 rounded-lg shadow-lg border-2 border-slate-500/40 relative overflow-hidden"
               >
-                <div className="absolute inset-0 grid grid-cols-2 gap-[2px] p-1">
+                <div className="absolute inset-0 border-[3px] border-slate-900/50 rounded-lg" />
+                <div className="absolute inset-2 grid grid-cols-2 gap-[2px] p-0.5">
                   {[...Array(4)].map((_, j) => (
-                    <div key={j} className="bg-blue-900/30 rounded-sm" />
+                    <div 
+                      key={j} 
+                      className="bg-slate-800/50 rounded-sm"
+                    />
                   ))}
                 </div>
+                <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent rounded-lg" />
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Additional smaller panel for depth */}
+        <div className="absolute top-60 right-48 animate-float" style={{ animationDelay: "1.5s" }}>
+          <div className="w-10 h-12 bg-gradient-to-br from-slate-600 via-slate-700 to-slate-800 rounded-lg shadow-md border border-slate-500/40 relative overflow-hidden">
+            <div className="absolute inset-1 grid grid-cols-2 gap-[1px]">
+              {[...Array(4)].map((_, j) => (
+                <div key={j} className="bg-slate-800/50 rounded-sm" />
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Login Card */}
-      <Card className="w-full max-w-md bg-white/95 backdrop-blur-sm shadow-2xl rounded-2xl overflow-hidden relative z-10">
+      <Card className="w-full max-w-md bg-background/95 backdrop-blur-sm shadow-2xl rounded-2xl overflow-hidden relative z-10">
         <div className="bg-gradient-dark-green p-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-4">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-background/20 rounded-full mb-4">
             <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
@@ -196,7 +231,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+            <Label htmlFor="email" className="text-sm font-medium text-muted-foreground700">
               Email Address
             </Label>
             <Input
@@ -211,7 +246,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+            <Label htmlFor="password" className="text-sm font-medium text-muted-foreground700">
               Password
             </Label>
             <div className="relative">
@@ -230,7 +265,7 @@ export default function LoginPage() {
                 size="icon"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-900"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground600 hover:text-muted-foreground900"
               >
                 {showPassword ? <EyeOff /> : <Eye />}
               </Button>
@@ -245,7 +280,7 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Sign In"}
           </Button>
 
-          <div className="text-center text-sm text-gray-600 space-y-1">
+          <div className="text-center text-sm text-muted-foreground600 space-y-1">
             {supabaseConfigured ? (
               <p>
                 No account? <Link href="/signup" className="text-green-600 hover:underline font-medium">Sign up</Link>

@@ -47,7 +47,7 @@ export function GovernmentDashboard() {
           {stats.map((stat) => {
             const Icon = stat.icon
             return (
-              <Card key={stat.label} className="bg-white border-neutral-200">
+              <Card key={stat.label} className="bg-white border-border">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
@@ -65,7 +65,7 @@ export function GovernmentDashboard() {
         </div>
 
         {/* Inspection Queue */}
-        <Card className="bg-white border-neutral-200">
+        <Card className="bg-white border-border">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Pending Inspections</CardTitle>
@@ -81,7 +81,7 @@ export function GovernmentDashboard() {
               {inspectionQueue.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-neutral-200"
+                  className="flex items-center justify-between p-4 rounded-lg border border-border"
                 >
                   <div className="flex-1">
                     <h4 className="font-semibold text-neutral-900 mb-1">{item.customer}</h4>
