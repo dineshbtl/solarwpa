@@ -223,7 +223,7 @@ export default function NewInstallationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-solar bg-solar-beige/50 px-4 py-3 sm:px-5">
           <Link href="/installations">

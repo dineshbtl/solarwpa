@@ -82,7 +82,7 @@ export default function InstallationsPage() {
   const pageItems = filteredInstallations.slice(startIndex, endIndex)
 
   return (
-    <div className="min-h-screen bg-background p-6 sm:p-8">
+    <div className="min-h-screen p-6 sm:p-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Installations</h1>

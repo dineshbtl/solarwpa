@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function SurveysLoading() {
   return (
-    <div className="min-h-screen bg-background p-6 sm:p-8">
+    <div className="min-h-screen p-6 sm:p-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <Skeleton className="h-5 w-24" />

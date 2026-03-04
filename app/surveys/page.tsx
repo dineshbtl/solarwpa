@@ -42,12 +42,15 @@ export default function SurveysPage() {
     refetch,
     sectionFilter,
     subDivisionFilter,
+    statusFilter,
+    feasibilityFilter,
     setSectionFilter,
     setSubDivisionFilter,
+    setStatusFilter,
+    setFeasibilityFilter,
   } = useSurveysLazy({ pageSize: 20 })
   const { data: users = [] } = useUsers()
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
   const [view, setView] = useState<"table" | "cards">("table")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
@@ -75,12 +78,14 @@ export default function SurveysPage() {
       consumerName: s.beneficiaryName,
       contractedLoad: s.contractedLoad ?? "",
       uploadDate: s.uploadDate,
+      updatedAt: (s as { updatedAt?: string }).updatedAt,
       approvedDate: s.approvedDate ?? "",
       aadhaar: s.aadharNo,
       mobile: s.mobile ?? "",
       status: s.status,
       installerId: s.installerId ?? "",
       submittedById: s.submittedById ?? "",
+      feasibility: s.siteDetails?.overallFeasibility ?? "",
     }))
     if (isSupabaseConfigured()) return stored
     const legacy = mockSurveys.map((s) => ({
@@ -99,24 +104,17 @@ export default function SurveysPage() {
       aadhaar: "",
       mobile: "",
       status: s.status,
+      feasibility: "",
     }))
     return [...stored, ...legacy]
   }, [lazySurveys])
 
-  const filteredSurveys = useMemo(
-    () =>
-      statusFilter === "all"
-        ? allSurveys
-        : allSurveys.filter((s: { status: string }) => s.status === statusFilter),
-    [allSurveys, statusFilter]
-  )
-
   const storedInView = useMemo(
-    () => filteredSurveys.filter((s: { kind: string }) => s.kind === "stored"),
-    [filteredSurveys]
+    () => allSurveys.filter((s: { kind: string }) => s.kind === "stored"),
+    [allSurveys]
   )
   const allStoredSelected =
-    storedInView.length > 0 && storedInView.every((s: { id: string }) => selectedIds.has(s.id))
+    storedInView.length > 0 && storedInView.every((s) => selectedIds.has(s.id))
   const someSelected = selectedIds.size > 0
 
   const toggleSelect = (id: string) => {
@@ -130,7 +128,7 @@ export default function SurveysPage() {
 
   const toggleSelectAll = () => {
     if (allStoredSelected) setSelectedIds(new Set())
-    else setSelectedIds(new Set(storedInView.map((s: { id: string }) => s.id)))
+    else setSelectedIds(new Set(storedInView.map((s) => s.id)))
   }
 
   const handleDeleteSelected = async () => {
@@ -173,7 +171,7 @@ export default function SurveysPage() {
   }, [hasMore, loadingMore, surveysLoading, loadMore])
 
   return (
-    <div className="min-h-screen bg-background p-6 sm:p-8">
+    <div className="min-h-screen p-6 sm:p-8">
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -222,7 +220,7 @@ export default function SurveysPage() {
                 />
               </div>
               <div className="flex flex-wrap gap-2 sm:gap-3">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
                   <SelectTrigger className="w-full border-border bg-background sm:w-[160px] rounded-lg">
                     <Filter className="mr-2 h-4 w-4 shrink-0" />
                     <SelectValue placeholder="Status" />
@@ -233,6 +231,17 @@ export default function SurveysPage() {
                     <SelectItem value="approved">Approved</SelectItem>
                     <SelectItem value="rejected">Rejected</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={feasibilityFilter || "all"} onValueChange={(v) => setFeasibilityFilter(v === "all" ? "" : v)}>
+                  <SelectTrigger className="w-full border-border bg-background sm:w-[180px] rounded-lg">
+                    <SelectValue placeholder="Feasibility" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Feasibility</SelectItem>
+                    <SelectItem value="Feasible">Feasible</SelectItem>
+                    <SelectItem value="Not Feasible">Not Feasible</SelectItem>
+                    <SelectItem value="pending">Pending Assessment</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={sectionFilter || "all"} onValueChange={(v) => setSectionFilter(v === "all" ? "" : v)}>
@@ -271,8 +280,12 @@ export default function SurveysPage() {
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="text-lg">Survey List ({filteredSurveys.length}{total > 0 ? ` of ${total}` : ""})</CardTitle>
-              <p className="text-sm text-muted-foreground">First 20 load quickly; search or scroll to load more</p>
+              <CardTitle className="text-lg">
+                Survey List ({allSurveys.length}{total > allSurveys.length ? ` of ${total}` : ""})
+              </CardTitle>
+              {total > allSurveys.length && (
+                <p className="text-sm text-muted-foreground">Scroll down or click load more to see all results</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
@@ -310,15 +323,15 @@ export default function SurveysPage() {
         </CardHeader>
         <CardContent>
           {surveysLoading ? (
-            <div className="space-y-1.5">
+            <div className="min-h-[320px] space-y-1.5" aria-busy="true" aria-label="Loading surveys">
               <div className="flex gap-1 border-b pb-1.5">
-                {Array.from({ length: 8 }).map((_, i) => (
+                {Array.from({ length: 13 }).map((_, i) => (
                   <Skeleton key={i} className="h-5 flex-1 min-w-[30px]" />
                 ))}
               </div>
-              {Array.from({ length: 5 }).map((_, i) => (
+              {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="flex gap-1">
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: 13 }).map((_, j) => (
                     <Skeleton key={j} className="h-5 flex-1 min-w-[30px]" />
                   ))}
                 </div>
@@ -344,23 +357,20 @@ export default function SurveysPage() {
                     </TableHead>
                     <TableHead>Service Number</TableHead>
                     <TableHead>Consumer Name</TableHead>
-                    <TableHead>CIRCLE</TableHead>
-                    <TableHead>DIVISION</TableHead>
-                    <TableHead>SUB DIVISION</TableHead>
-                    <TableHead>SECTION</TableHead>
-                    <TableHead>Contracted Load</TableHead>
-                    <TableHead>Upload Date</TableHead>
-                    <TableHead>Approved Date</TableHead>
-                    <TableHead>AADHAAR</TableHead>
-                    <TableHead>MOBILE</TableHead>
+                    <TableHead>Circle</TableHead>
+                    <TableHead>Division</TableHead>
+                    <TableHead>Sub Division</TableHead>
+                    <TableHead>Section</TableHead>
+                    <TableHead>Updated on</TableHead>
+                    <TableHead>Aadhaar</TableHead>
+                    <TableHead>Mobile</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Installer</TableHead>
-                    <TableHead>Surveyor</TableHead>
+                    <TableHead>Feasibility</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSurveys.map((s: any, idx: number) => (
+                  {allSurveys.map((s: any, idx: number) => (
                     <TableRow key={`${s.kind}-${s.id}`}>
                       <TableCell className="w-24">
                         <div className="flex items-center gap-2">
@@ -379,18 +389,20 @@ export default function SurveysPage() {
                           {s.serviceNumber || s.id}
                         </Link>
                       </TableCell>
-                      <TableCell className="min-w-[220px]">
+                      <TableCell className="min-w-[220px] capitalize">
                         <Link href={`/surveys/${s.id}`} className="hover:underline underline-offset-4">
                           {s.consumerName || "-"}
                         </Link>
                       </TableCell>
-                      <TableCell>{s.circle || "-"}</TableCell>
-                      <TableCell>{s.division || "-"}</TableCell>
-                      <TableCell>{s.subDivision || "-"}</TableCell>
-                      <TableCell>{s.section || "-"}</TableCell>
-                      <TableCell>{s.contractedLoad || "-"}</TableCell>
-                      <TableCell>{s.uploadDate ? new Date(s.uploadDate).toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }) : "-"}</TableCell>
-                      <TableCell>{s.approvedDate ? new Date(s.approvedDate).toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }) : "-"}</TableCell>
+                      <TableCell className="capitalize">{s.circle || "-"}</TableCell>
+                      <TableCell className="capitalize">{s.division || "-"}</TableCell>
+                      <TableCell className="capitalize">{s.subDivision || "-"}</TableCell>
+                      <TableCell className="capitalize">{s.section || "-"}</TableCell>
+                      <TableCell>
+                        {(s.updatedAt ?? s.uploadDate)
+                          ? new Date(s.updatedAt ?? s.uploadDate).toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" })
+                          : "-"}
+                      </TableCell>
                       <TableCell>{s.aadhaar || "-"}</TableCell>
                       <TableCell>{s.mobile || "-"}</TableCell>
                       <TableCell>
@@ -408,14 +420,19 @@ export default function SurveysPage() {
                           {s.status}
                         </span>
                       </TableCell>
-                  <TableCell>
-                    {s.kind === "stored" && s.installerId ? getUserById(s.installerId)?.name ?? s.installerId : "-"}
-                  </TableCell>
-                  <TableCell>
-                    {s.kind === "stored" && s.submittedById
-                      ? getUserById(s.submittedById)?.name ?? s.submittedById
-                      : "-"}
-                  </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                            s.feasibility === "Feasible"
+                              ? "bg-green-100 text-green-800"
+                              : s.feasibility === "Not Feasible"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {s.feasibility || "Pending"}
+                        </span>
+                      </TableCell>
                       <TableCell>
                         {s.kind === "stored" ? (
                           <Link href={`/surveys/${s.id}/edit`} className="inline-flex items-center text-sm underline underline-offset-4">
@@ -439,9 +456,9 @@ export default function SurveysPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {filteredSurveys.length === 0 && !surveysLoading && (
+                  {allSurveys.length === 0 && !surveysLoading && (
                     <TableRow>
-                      <TableCell colSpan={16} className="py-10 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={13} className="py-10 text-center text-sm text-muted-foreground">
                         No surveys found. Try a different search or status filter.
                       </TableCell>
                     </TableRow>
@@ -452,7 +469,7 @@ export default function SurveysPage() {
 
             <TabsContent value="cards">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredSurveys.map((s: any, idx: number) => (
+                {allSurveys.map((s: any, idx: number) => (
                   <Link key={`${s.kind}-${s.id}`} href={`/surveys/${s.id}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <Card className="border-border bg-card shadow-sm rounded-xl transition-colors hover:bg-muted/50 cursor-pointer">
                       <CardHeader className="pb-3">
@@ -462,7 +479,7 @@ export default function SurveysPage() {
                             <p className="mt-1 text-xs text-muted-foreground">
                               Service No: <span className="font-medium text-foreground">{s.serviceNumber || "-"}</span>
                             </p>
-                            <CardTitle className="mt-1 text-base truncate">{s.consumerName || "-"}</CardTitle>
+                            <CardTitle className="mt-1 text-base truncate capitalize">{s.consumerName || "-"}</CardTitle>
                           </div>
                         <span
                           className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
@@ -484,20 +501,6 @@ export default function SurveysPage() {
                         <span className="text-muted-foreground">Service No</span>
                         <span className="font-medium">{s.serviceNumber || "-"}</span>
                       </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Installer</span>
-                      <span className="font-medium">
-                        {s.kind === "stored" && s.installerId ? getUserById(s.installerId)?.name ?? s.installerId : "-"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">Surveyor</span>
-                      <span className="font-medium">
-                        {s.kind === "stored" && s.submittedById
-                          ? getUserById(s.submittedById)?.name ?? s.submittedById
-                          : "-"}
-                      </span>
-                    </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-muted-foreground">Mobile</span>
                         <span className="font-medium">{s.mobile || "-"}</span>
@@ -507,26 +510,35 @@ export default function SurveysPage() {
                         <span className="font-medium">{s.aadhaar || "-"}</span>
                       </div>
                       <div className="flex justify-between gap-3">
-                        <span className="text-muted-foreground">Contracted Load</span>
-                        <span className="font-medium">{s.contractedLoad || "-"}</span>
+                        <span className="text-muted-foreground">Feasibility</span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            s.feasibility === "Feasible"
+                              ? "bg-green-100 text-green-800"
+                              : s.feasibility === "Not Feasible"
+                                ? "bg-red-100 text-red-800"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {s.feasibility || "Pending"}
+                        </span>
                       </div>
                       <div className="pt-2 text-xs text-muted-foreground">
-                        <div className="flex flex-wrap gap-x-3 gap-y-1">
-                          <span>CIRCLE: {s.circle || "-"}</span>
-                          <span>DIV: {s.division || "-"}</span>
-                          <span>SUB: {s.subDivision || "-"}</span>
-                          <span>SEC: {s.section || "-"}</span>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 capitalize">
+                          <span>Circle: {s.circle || "-"}</span>
+                          <span>Div: {s.division || "-"}</span>
+                          <span>Sub: {s.subDivision || "-"}</span>
+                          <span>Sec: {s.section || "-"}</span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                          <span>Upload: {s.uploadDate ? new Date(s.uploadDate).toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }) : "-"}</span>
-                          <span>Approved: {s.approvedDate ? new Date(s.approvedDate).toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }) : "-"}</span>
+                          <span>Updated on: {(s.updatedAt ?? s.uploadDate) ? new Date(s.updatedAt ?? s.uploadDate).toLocaleDateString("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }) : "-"}</span>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                   </Link>
                 ))}
-                {filteredSurveys.length === 0 && !surveysLoading && (
+                {allSurveys.length === 0 && !surveysLoading && (
                   <Card className="border-border bg-card shadow-sm rounded-xl sm:col-span-2 lg:col-span-3">
                     <CardContent className="py-10 text-center text-sm text-muted-foreground">
                       No surveys found. Try a different search or status filter.
@@ -541,12 +553,12 @@ export default function SurveysPage() {
           {/* Load more / count */}
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              Showing <span className="font-medium">{filteredSurveys.length}</span>
-              {total > 0 && (
-                <>
-                  {" "}
-                  of <span className="font-medium">{total}</span>
-                </>
+              Showing <span className="font-medium">{allSurveys.length}</span>
+              {total > allSurveys.length && (
+                <> of <span className="font-medium">{total}</span></>
+              )}
+              {total > 0 && total === allSurveys.length && (
+                <> survey{total !== 1 ? "s" : ""}</>
               )}
             </p>
             {hasMore && (

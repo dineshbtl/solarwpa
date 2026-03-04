@@ -56,9 +56,21 @@ export async function createUserInSupabase(input: CreateUserInput): Promise<User
   let authUserId: string
   
   if (existingAuthUser) {
-    // Use existing auth user
     authUserId = existingAuthUser.id
     console.log('[createUserInSupabase] Using existing auth user:', authUserId)
+    
+    // Update the auth user's password so login works with the newly provided password
+    if (input.password) {
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(authUserId, {
+        password: input.password,
+        email_confirm: true,
+      })
+      if (updateError) {
+        console.error('[createUserInSupabase] Failed to update auth user password:', updateError)
+        throw new Error(`Failed to update auth account password: ${updateError.message}`)
+      }
+      console.log('[createUserInSupabase] Updated password for existing auth user:', authUserId)
+    }
   } else {
     // Create new auth user using Admin API (bypasses email confirmation)
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
@@ -136,6 +148,41 @@ export async function updateUserInSupabase(userId: string, input: UpdateUserInpu
   return rowToUser(data)
 }
 
+/** Update profile using admin client (for edit-user from server so status/role etc. work regardless of RLS). */
+export async function updateUserInSupabaseAdmin(userId: string, input: UpdateUserInput): Promise<User> {
+  const admin = getSupabaseAdminClient()
+  const updates: Record<string, unknown> = {}
+  if (input.name !== undefined) updates.name = input.name
+  if (input.email !== undefined) updates.email = input.email
+  if (input.role !== undefined) updates.role = input.role
+  if (input.status !== undefined) updates.status = input.status
+  if (input.phone !== undefined) updates.phone = input.phone?.trim() || null
+  if (input.aadharNo !== undefined) updates.aadhar_no = input.aadharNo?.trim() || null
+  if (input.city !== undefined) updates.city = input.city?.trim() || null
+  if (input.state !== undefined) updates.state = input.state?.trim() || null
+  if (input.district !== undefined) updates.district = input.district?.trim() || null
+  if (input.fullAddress !== undefined) updates.full_address = input.fullAddress?.trim() || null
+  const { data, error } = await admin.from('profiles').update(updates).eq('id', userId).select().single()
+  if (error) throw error
+
+  // If password was provided, update the auth user's password too
+  if (input.password && input.password.trim() !== '') {
+    const authUserId = (data as { auth_user_id?: string }).auth_user_id
+    if (authUserId) {
+      const { error: authError } = await admin.auth.admin.updateUserById(authUserId, {
+        password: input.password,
+      })
+      if (authError) {
+        console.error('[updateUserInSupabaseAdmin] Failed to update auth password:', authError)
+        throw new Error(`Profile updated but failed to update login password: ${authError.message}`)
+      }
+      console.log('[updateUserInSupabaseAdmin] Updated auth password for user:', authUserId)
+    }
+  }
+
+  return rowToUser(data)
+}
+
 export async function updateUserRoleInSupabase(userId: string, role: Role): Promise<User> {
   const supabase = getSupabaseBrowserClient()
   const { data, error } = await supabase.from('profiles').update({ role }).eq('id', userId).select().single()
@@ -167,6 +214,30 @@ export async function deleteUserInSupabase(userId: string): Promise<void> {
     } catch (e) {
       console.error('[deleteUserInSupabase] Failed to delete auth user:', e)
       // Profile is already deleted, so we don't throw
+    }
+  }
+}
+
+/** Delete user using admin client (for delete from server so service role key is available). */
+export async function deleteUserInSupabaseAdmin(userId: string): Promise<void> {
+  const admin = getSupabaseAdminClient()
+  const { data: profile, error: fetchError } = await admin
+    .from('profiles')
+    .select('auth_user_id')
+    .eq('id', userId)
+    .maybeSingle()
+
+  if (fetchError) throw fetchError
+
+  const { error } = await admin.from('profiles').delete().eq('id', userId)
+  if (error) throw error
+
+  const authUserId = (profile as { auth_user_id?: string } | null)?.auth_user_id
+  if (authUserId) {
+    try {
+      await admin.auth.admin.deleteUser(authUserId)
+    } catch (e) {
+      console.error('[deleteUserInSupabaseAdmin] Failed to delete auth user:', e)
     }
   }
 }

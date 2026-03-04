@@ -81,7 +81,7 @@ export default function EditInspectionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-6 sm:p-8">
+      <div className="min-h-screen p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
     )
@@ -89,7 +89,7 @@ export default function EditInspectionPage() {
 
   if (notFound) {
     return (
-      <div className="min-h-screen bg-background p-6 sm:p-8">
+      <div className="min-h-screen p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Inspection not found.</p>
         <div className="mt-4">
           <Link href="/inspections">
@@ -104,7 +104,7 @@ export default function EditInspectionPage() {
     inspectorId !== "__none__" ? getUserById(inspectorId)?.name ?? inspectorId : "Unassigned"
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <Link href={`/inspections/${id}`}>
           <Button variant="ghost" className="mb-6 text-foreground hover:bg-accent">

@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ClipboardCheck, MapPin, Wrench, CheckCircle, TrendingUp, Loader2 } from "lucide-react"
+import { ClipboardCheck, MapPin, Wrench, CheckCircle, TrendingUp, Loader2, ThumbsUp, ThumbsDown, ClipboardList, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useProjects, useSurveys, useInstallations, useInspections } from "@/lib/data/hooks"
 import type { Survey } from "@/lib/data/surveys"
@@ -32,6 +32,12 @@ export default function DashboardPage() {
       const d = new Date(i.completedAt)
       return d.getMonth() === thisMonth && d.getFullYear() === thisYear
     }).length
+
+    const totalSurveys = surveys.length
+    const feasible = surveys.filter((s) => s.siteDetails?.overallFeasibility === "Feasible").length
+    const notFeasible = surveys.filter((s) => s.siteDetails?.overallFeasibility === "Not Feasible").length
+    const pendingAssessment = totalSurveys - feasible - notFeasible
+
     return {
       totalProjects: projects.length,
       pendingSurveys: surveys.filter((s) => s.status === "pending").length,
@@ -39,6 +45,10 @@ export default function DashboardPage() {
         (i) => i.status === "in_progress" || i.status === "pending" || i.status === "inspection_pending"
       ).length,
       completedThisMonth,
+      totalSurveys,
+      feasible,
+      notFeasible,
+      pendingAssessment,
     }
   }, [projects.length, surveys, installations])
 
@@ -52,7 +62,7 @@ export default function DashboardPage() {
   const loading = projectsLoading || surveysLoading || installationsLoading || inspectionsLoading
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gradient-green">Welcome back</h1>
@@ -113,6 +123,65 @@ export default function DashboardPage() {
                   </div>
                   <div className="rounded-lg bg-background/20 p-3">
                     <CheckCircle className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Feasibility KPIs */}
+            <div className="mb-6 sm:mb-8">
+              <h2 className="text-lg font-semibold text-foreground mb-4">Survey Feasibility Overview</h2>
+              <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-muted-foreground">Total Surveys</p>
+                      <h3 className="mt-3 text-4xl font-bold text-foreground">{stats.totalSurveys}</h3>
+                      <p className="mt-2 text-xs text-muted-foreground">All site surveys</p>
+                    </div>
+                    <div className="rounded-lg bg-blue-50 p-3">
+                      <ClipboardList className="h-6 w-6 text-blue-600" />
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-muted-foreground">Feasible</p>
+                      <h3 className="mt-3 text-4xl font-bold text-green-700">{stats.feasible}</h3>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {stats.totalSurveys > 0 ? `${Math.round((stats.feasible / stats.totalSurveys) * 100)}%` : "0%"} of total
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-green-50 p-3">
+                      <ThumbsUp className="h-6 w-6 text-green-600" />
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-muted-foreground">Not Feasible</p>
+                      <h3 className="mt-3 text-4xl font-bold text-red-700">{stats.notFeasible}</h3>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {stats.totalSurveys > 0 ? `${Math.round((stats.notFeasible / stats.totalSurveys) * 100)}%` : "0%"} of total
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-red-50 p-3">
+                      <ThumbsDown className="h-6 w-6 text-red-600" />
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-muted-foreground">Pending Assessment</p>
+                      <h3 className="mt-3 text-4xl font-bold text-amber-700">{stats.pendingAssessment}</h3>
+                      <p className="mt-2 text-xs text-muted-foreground">Awaiting feasibility check</p>
+                    </div>
+                    <div className="rounded-lg bg-amber-50 p-3">
+                      <AlertCircle className="h-6 w-6 text-amber-600" />
+                    </div>
                   </div>
                 </div>
               </div>

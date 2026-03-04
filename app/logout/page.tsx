@@ -43,7 +43,7 @@ export default function LogoutPage() {
   }, [router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <p className="text-muted-foreground">Signing out…</p>
       </div>

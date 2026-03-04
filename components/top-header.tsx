@@ -48,7 +48,7 @@ export function TopHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 bg-background border-b border-border">
+    <header className="sticky top-0 z-40 bg-white dark:bg-sidebar border-b border-border">
       <div className="flex h-16 items-center justify-between px-8">
         {/* Search */}
         <div className="flex-1 max-w-md">

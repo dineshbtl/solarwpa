@@ -94,6 +94,7 @@ function rowToSurvey(row: SurveyRow): Survey {
     contractedLoad: row.contracted_load ?? undefined,
     status: row.status,
     uploadDate: row.upload_date,
+    updatedAt: row.updated_at ?? undefined,
     approvedDate: row.approved_date ?? undefined,
     submittedById: row.submitted_by_id ?? undefined,
     submittedAt: row.submitted_at,
@@ -111,10 +112,18 @@ function rowToSurvey(row: SurveyRow): Survey {
       circle: siteLocation?.circle,
       address: siteLocation?.address,
       mandal: siteLocation?.mandal,
+      village: siteLocation?.village,
       district: siteLocation?.district,
       pinCode: siteLocation?.pinCode ?? siteLocation?.pin_code,
       state: siteLocation?.state,
       city: siteLocation?.city,
+      latitude: siteLocation?.latitude,
+      longitude: siteLocation?.longitude,
+      electricityConsumerNo: siteLocation?.electricityConsumerNo ?? siteLocation?.electricity_consumer_no,
+      connectionType: siteLocation?.connectionType ?? siteLocation?.connection_type,
+      phase: siteLocation?.phase,
+      sanctionedLoadKw: siteLocation?.sanctionedLoadKw ?? siteLocation?.sanctioned_load_kw,
+      avgMonthlyBillRupees: siteLocation?.avgMonthlyBillRupees ?? siteLocation?.avg_monthly_bill_rupees,
     },
     bankDetails: {
       bankName: bankDetails?.bankName ?? bankDetails?.bank_name,
@@ -147,12 +156,14 @@ export type ListSurveysPaginatedParams = {
   search?: string
   section?: string
   subDivision?: string
+  status?: string
+  feasibility?: string
 }
 
 export async function listSurveysFromSupabasePaginated(
   params: ListSurveysPaginatedParams
 ): Promise<{ items: Survey[]; total: number }> {
-  const { limit, offset, search, section, subDivision } = params
+  const { limit, offset, search, section, subDivision, status, feasibility } = params
   const supabase = getSupabaseBrowserClient()
   let query = supabase
     .from('surveys')
@@ -172,6 +183,16 @@ export async function listSurveysFromSupabasePaginated(
   }
   if (subDivision?.trim()) {
     query = query.filter('site_location->>subDivision', 'eq', subDivision.trim())
+  }
+  if (status?.trim()) {
+    query = query.eq('status', status.trim())
+  }
+  if (feasibility?.trim()) {
+    if (feasibility === 'pending') {
+      query = query.or('site_details->>overallFeasibility.is.null,site_details.is.null')
+    } else {
+      query = query.filter('site_details->>overallFeasibility', 'eq', feasibility.trim())
+    }
   }
 
   const { data, error, count } = await query.range(offset, offset + limit - 1)

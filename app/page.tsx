@@ -77,6 +77,31 @@ export default function LoginPage() {
           setLoading(false)
           return
         }
+
+        // Check profile status — block inactive users
+        try {
+          const authUser = (data as { user?: { id?: string } })?.user
+          if (authUser?.id) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("status")
+              .eq("auth_user_id", authUser.id)
+              .maybeSingle()
+            if (profile?.status === "inactive") {
+              await supabase.auth.signOut()
+              toast({
+                title: "Account deactivated",
+                description: "Your account has been deactivated. Please contact your administrator.",
+                variant: "destructive",
+              })
+              setLoading(false)
+              return
+            }
+          }
+        } catch {
+          // If profile check fails, allow login (profile might not exist yet)
+        }
+
         toast({ title: "Welcome back!", description: "Signed in successfully." })
         router.push("/dashboard")
         router.refresh()
@@ -100,7 +125,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#f3f4f6] flex items-center justify-center p-4 relative overflow-hidden">
       {/* Animated Solar Background */}
       <div className="absolute inset-0 overflow-hidden">
         {/* Animated Sun */}
@@ -231,7 +256,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="p-8 space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium text-muted-foreground700">
+            <Label htmlFor="email" className="text-sm font-medium text-muted-foreground">
               Email Address
             </Label>
             <Input
@@ -246,7 +271,7 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium text-muted-foreground700">
+            <Label htmlFor="password" className="text-sm font-medium text-muted-foreground">
               Password
             </Label>
             <div className="relative">
@@ -265,7 +290,7 @@ export default function LoginPage() {
                 size="icon"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground600 hover:text-muted-foreground900"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
               >
                 {showPassword ? <EyeOff /> : <Eye />}
               </Button>
@@ -280,7 +305,7 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Sign In"}
           </Button>
 
-          <div className="text-center text-sm text-muted-foreground600 space-y-1">
+          <div className="text-center text-sm text-muted-foreground space-y-1">
             {supabaseConfigured ? (
               <p>
                 No account? <Link href="/signup" className="text-green-600 hover:underline font-medium">Sign up</Link>

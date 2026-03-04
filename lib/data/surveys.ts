@@ -25,6 +25,8 @@ export type ListSurveysPaginatedParams = {
   search?: string
   section?: string
   subDivision?: string
+  status?: string
+  feasibility?: string
 }
 
 export async function listSurveysPaginated(
@@ -51,6 +53,16 @@ export async function listSurveysPaginated(
   }
   if (params.subDivision?.trim()) {
     filtered = filtered.filter((s) => (s.siteLocation?.subDivision ?? '') === params.subDivision!.trim())
+  }
+  if (params.status?.trim()) {
+    filtered = filtered.filter((s) => s.status === params.status!.trim())
+  }
+  if (params.feasibility?.trim()) {
+    if (params.feasibility === 'pending') {
+      filtered = filtered.filter((s) => !s.siteDetails?.overallFeasibility)
+    } else {
+      filtered = filtered.filter((s) => s.siteDetails?.overallFeasibility === params.feasibility!.trim())
+    }
   }
   filtered.sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
   const total = filtered.length

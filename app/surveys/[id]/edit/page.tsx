@@ -84,6 +84,26 @@ export default function EditSurveyPage() {
     meterAcCableMeters?: number
     meterDcCableMeters?: number
     slabThicknessInches?: number
+    roofOwnership?: "Self" | "Joint" | "Rented"
+    ownerConsentAvailable?: "Yes" | "No"
+    availableRoofAreaSqm?: number
+    shadowFreeAreaAvailable?: "Yes" | "No"
+    roofOrientation?: "South" | "East-West" | "Other"
+    roofCondition?: "Good" | "Average" | "Poor"
+    shadingObjects?: string
+    shadingDuration?: "Nil" | "<1 hr" | "1–2 hrs" | ">2 hrs"
+    distanceRoofToMeterM?: number
+    inverterSpaceAvailable?: "Yes" | "No"
+    existingEarthing?: "Yes" | "No"
+    earthPitsFeasibility?: "Yes" | "No"
+    cableRoutingFeasible?: "Yes" | "No"
+    uscNo?: string
+    dtrCapacity?: string | number
+    ageOfBuildingYears?: number
+    documentsCollected?: { electricityBill?: boolean; aadhaar?: boolean; bankDetails?: boolean; rooftopPhotos?: boolean; meterPhoto?: boolean }
+    recommendedSystemSizeKw?: number | string
+    overallFeasibility?: "Feasible" | "Not Feasible"
+    notFeasibleReason?: "Insufficient Space" | "Shading" | "Structural Issue" | "Consumer Not Willing"
   }>({})
   const [isCapturingLocation, setIsCapturingLocation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -117,10 +137,18 @@ export default function EditSurveyPage() {
         circle: "",
         address: "",
         mandal: "",
+        village: "",
         district: "",
         pinCode: "",
         state: "",
         city: "",
+        latitude: "",
+        longitude: "",
+        electricityConsumerNo: "",
+        connectionType: undefined,
+        phase: undefined,
+        sanctionedLoadKw: undefined,
+        avgMonthlyBillRupees: undefined,
       },
       bankDetails: {
         bankName: "",
@@ -134,8 +162,9 @@ export default function EditSurveyPage() {
 
   useEffect(() => {
     if (!survey) return
-    setSiteDetails(survey.siteDetails ?? {})
+    setSiteDetails({ ...(survey.siteDetails ?? {}) })
     setExistingUploads(survey.uploads ?? {})
+    const sl = survey.siteLocation
     form.reset({
       beneficiaryName: survey.beneficiaryName ?? "",
       serviceNo: survey.serviceNo ?? "",
@@ -149,16 +178,24 @@ export default function EditSurveyPage() {
       totalRoofs: survey.totalRoofs ?? "G",
       roofType: survey.roofType ?? "RCC",
       siteLocation: {
-        section: survey.siteLocation?.section ?? "",
-        subDivision: survey.siteLocation?.subDivision ?? "",
-        division: survey.siteLocation?.division ?? "",
-        circle: survey.siteLocation?.circle ?? "",
-        address: survey.siteLocation?.address ?? "",
-        mandal: survey.siteLocation?.mandal ?? "",
-        district: survey.siteLocation?.district ?? "",
-        pinCode: survey.siteLocation?.pinCode ?? "",
-        state: survey.siteLocation?.state ?? "",
-        city: survey.siteLocation?.city ?? "",
+        section: sl?.section ?? "",
+        subDivision: sl?.subDivision ?? "",
+        division: sl?.division ?? "",
+        circle: sl?.circle ?? "",
+        address: sl?.address ?? "",
+        mandal: sl?.mandal ?? "",
+        village: sl?.village ?? "",
+        district: sl?.district ?? "",
+        pinCode: sl?.pinCode ?? "",
+        state: sl?.state ?? "",
+        city: sl?.city ?? "",
+        latitude: sl?.latitude ?? "",
+        longitude: sl?.longitude ?? "",
+        electricityConsumerNo: sl?.electricityConsumerNo ?? "",
+        connectionType: sl?.connectionType ?? undefined,
+        phase: sl?.phase ?? undefined,
+        sanctionedLoadKw: sl?.sanctionedLoadKw ?? undefined,
+        avgMonthlyBillRupees: sl?.avgMonthlyBillRupees ?? undefined,
       },
       bankDetails: {
         bankName: survey.bankDetails?.bankName ?? "",
@@ -402,7 +439,7 @@ export default function EditSurveyPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-6 sm:p-8">
+      <div className="min-h-screen p-6 sm:p-8">
         <div className="flex flex-col gap-2">
           <Skeleton className="h-5 w-16" />
           <Skeleton className="h-32 w-full rounded-lg" />
@@ -413,7 +450,7 @@ export default function EditSurveyPage() {
 
   if (error || !survey) {
     return (
-      <div className="min-h-screen bg-background p-6 sm:p-8">
+      <div className="min-h-screen p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Survey not found.</p>
         <div className="mt-4">
           <Link href="/surveys">
@@ -425,7 +462,7 @@ export default function EditSurveyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <Link href={`/surveys/${id}`}>
           <Button variant="outline" className="mb-6 border-gray-300 bg-white text-muted-foreground800 hover:bg-muted hover:border-gray-400">
@@ -434,6 +471,7 @@ export default function EditSurveyPage() {
           </Button>
         </Link>
 
+        <div className="rounded-2xl bg-white shadow-xl border border-border p-4 sm:p-6">
         {/* Header — same as detail page */}
         <Card className="mb-6 border-solar bg-solar-card shadow-sm">
           <CardHeader>
@@ -473,7 +511,7 @@ export default function EditSurveyPage() {
                     <p className="text-xs text-muted-foreground">The logged-in user is recorded as the submitter when you save.</p>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="beneficiaryName"
@@ -524,7 +562,7 @@ export default function EditSurveyPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="aadharNo"
@@ -554,7 +592,7 @@ export default function EditSurveyPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="mobile"
@@ -609,7 +647,7 @@ export default function EditSurveyPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="siteLocation.section"
@@ -648,7 +686,7 @@ export default function EditSurveyPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="siteLocation.division"
@@ -687,7 +725,7 @@ export default function EditSurveyPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="siteLocation.mandal"
@@ -726,7 +764,7 @@ export default function EditSurveyPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="siteLocation.pinCode"
@@ -793,12 +831,147 @@ export default function EditSurveyPage() {
                       <FormItem>
                         <FormLabel>Address of the Location</FormLabel>
                         <FormControl>
-                          <Textarea className="border-solar" rows={3} {...field} />
+                          <Textarea className="border-solar" rows={3} {...field} value={field.value ?? ""} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
+                    <FormField
+                      control={form.control}
+                      name="siteLocation.village"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Village</FormLabel>
+                          <FormControl>
+                            <Input className="border-solar" placeholder="Village" {...field} value={field.value ?? ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="siteLocation.electricityConsumerNo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Electricity Consumer No.</FormLabel>
+                          <FormControl>
+                            <Input className="border-solar" placeholder="Consumer number" {...field} value={field.value ?? ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                    <FormField
+                      control={form.control}
+                      name="siteLocation.connectionType"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Connection Type</FormLabel>
+                          <Select value={field.value ?? ""} onValueChange={(v) => field.onChange(v === "" ? undefined : v)}>
+                            <FormControl>
+                              <SelectTrigger className="border-solar bg-background">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="Domestic">Domestic</SelectItem>
+                              <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="siteLocation.phase"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phase</FormLabel>
+                          <Select value={field.value ?? ""} onValueChange={(v) => field.onChange(v === "" ? undefined : v)}>
+                            <FormControl>
+                              <SelectTrigger className="border-solar bg-background">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="1">1</SelectItem>
+                              <SelectItem value="3">3</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="siteLocation.sanctionedLoadKw"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Sanctioned Load (kW)</FormLabel>
+                          <FormControl>
+                            <Input className="border-solar" type="number" inputMode="decimal" placeholder="e.g. 3" {...field} value={field.value ?? ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="siteLocation.avgMonthlyBillRupees"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Avg. Monthly Bill (₹)</FormLabel>
+                          <FormControl>
+                            <Input className="border-solar" type="number" inputMode="decimal" placeholder="e.g. 500" {...field} value={field.value ?? ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Rooftop Ownership & Consent */}
+              <Card className="border-solar bg-solar-card shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg text-foreground">Rooftop Ownership &amp; Consent</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Roof Ownership</label>
+                      <Select value={siteDetails.roofOwnership ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, roofOwnership: v === "" ? undefined : (v as "Self" | "Joint" | "Rented") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Self">Self</SelectItem>
+                          <SelectItem value="Joint">Joint</SelectItem>
+                          <SelectItem value="Rented">Rented</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Owner Consent Available (if applicable)</label>
+                      <Select value={siteDetails.ownerConsentAvailable ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, ownerConsentAvailable: v === "" ? undefined : (v as "Yes" | "No") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -808,7 +981,7 @@ export default function EditSurveyPage() {
                   <CardTitle className="text-lg text-foreground">Plant & Roof Details</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="plantType"
@@ -845,7 +1018,7 @@ export default function EditSurveyPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="totalRoofs"
@@ -918,7 +1091,7 @@ export default function EditSurveyPage() {
                     )}
                   />
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">Meter AC Cable (m)</label>
                       <Input
@@ -968,6 +1141,232 @@ export default function EditSurveyPage() {
                       }}
                     />
                   </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Available Roof Area (approx.) sq.m</label>
+                      <Input
+                        className="border-solar bg-background"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        placeholder="e.g. 50"
+                        value={siteDetails.availableRoofAreaSqm ?? ""}
+                        onChange={(e) => setSiteDetails((p) => ({ ...p, availableRoofAreaSqm: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Shadow-free area available</label>
+                      <Select value={siteDetails.shadowFreeAreaAvailable ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, shadowFreeAreaAvailable: v === "" ? undefined : (v as "Yes" | "No") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Roof Orientation</label>
+                      <Select value={siteDetails.roofOrientation ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, roofOrientation: v === "" ? undefined : (v as "South" | "East-West" | "Other") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="South">South</SelectItem>
+                          <SelectItem value="East-West">East-West</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Roof Condition</label>
+                      <Select value={siteDetails.roofCondition ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, roofCondition: v === "" ? undefined : (v as "Good" | "Average" | "Poor") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Good">Good</SelectItem>
+                          <SelectItem value="Average">Average</SelectItem>
+                          <SelectItem value="Poor">Poor</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Shading & Obstructions */}
+              <Card className="border-solar bg-solar-card shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg text-foreground">Shading &amp; Obstructions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Nearby shading objects</label>
+                      <Input
+                        className="border-solar bg-background"
+                        placeholder="e.g. Trees, Water Tank, None"
+                        value={siteDetails.shadingObjects ?? ""}
+                        onChange={(e) => setSiteDetails((p) => ({ ...p, shadingObjects: e.target.value || undefined }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Shading Duration</label>
+                      <Select value={siteDetails.shadingDuration ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, shadingDuration: v === "" ? undefined : (v as "Nil" | "<1 hr" | "1–2 hrs" | ">2 hrs") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Nil">Nil</SelectItem>
+                          <SelectItem value="<1 hr">&lt;1 hr</SelectItem>
+                          <SelectItem value="1–2 hrs">1–2 hrs</SelectItem>
+                          <SelectItem value=">2 hrs">&gt;2 hrs</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Electrical Feasibility */}
+              <Card className="border-solar bg-solar-card shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg text-foreground">Electrical Feasibility</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Distance Roof to Meter (m)</label>
+                      <Input
+                        className="border-solar bg-background"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        placeholder="e.g. 10"
+                        value={siteDetails.distanceRoofToMeterM ?? ""}
+                        onChange={(e) => setSiteDetails((p) => ({ ...p, distanceRoofToMeterM: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Inverter installation space available</label>
+                      <Select value={siteDetails.inverterSpaceAvailable ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, inverterSpaceAvailable: v === "" ? undefined : (v as "Yes" | "No") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Existing Earthing</label>
+                      <Select value={siteDetails.existingEarthing ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, existingEarthing: v === "" ? undefined : (v as "Yes" | "No") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Earth Pits Feasibility</label>
+                      <Select value={siteDetails.earthPitsFeasibility ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, earthPitsFeasibility: v === "" ? undefined : (v as "Yes" | "No") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Cable routing feasible</label>
+                      <Select value={siteDetails.cableRoutingFeasible ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, cableRoutingFeasible: v === "" ? undefined : (v as "Yes" | "No") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Yes">Yes</SelectItem>
+                          <SelectItem value="No">No</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">USC No</label>
+                      <Input className="border-solar bg-background" placeholder="USC number" value={siteDetails.uscNo ?? ""} onChange={(e) => setSiteDetails((p) => ({ ...p, uscNo: e.target.value || undefined }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">DTR Capacity</label>
+                      <Input className="border-solar bg-background" placeholder="e.g. 100" value={siteDetails.dtrCapacity ?? ""} onChange={(e) => setSiteDetails((p) => ({ ...p, dtrCapacity: e.target.value || undefined }))} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Age of the Building</label>
+                      <Input
+                        className="border-solar bg-background"
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        placeholder="years"
+                        value={siteDetails.ageOfBuildingYears ?? ""}
+                        onChange={(e) => setSiteDetails((p) => ({ ...p, ageOfBuildingYears: e.target.value === "" ? undefined : Number(e.target.value) }))}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Feasibility Result (Surveyor Assessment) */}
+              <Card className="border-solar bg-solar-card shadow-sm">
+                <CardHeader>
+                  <CardTitle className="text-lg text-foreground">Feasibility Result (Surveyor Assessment)</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Recommended System Size (kW)</label>
+                      <Input
+                        className="border-solar bg-background"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        placeholder="e.g. 3"
+                        value={siteDetails.recommendedSystemSizeKw ?? ""}
+                        onChange={(e) => setSiteDetails((p) => ({ ...p, recommendedSystemSizeKw: e.target.value === "" ? undefined : e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">Overall Feasibility</label>
+                      <Select value={siteDetails.overallFeasibility ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, overallFeasibility: v === "" ? undefined : (v as "Feasible" | "Not Feasible") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Feasible">Feasible</SelectItem>
+                          <SelectItem value="Not Feasible">Not Feasible</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">If Not Feasible, Reason</label>
+                      <Select value={siteDetails.notFeasibleReason ?? ""} onValueChange={(v) => setSiteDetails((p) => ({ ...p, notFeasibleReason: v === "" ? undefined : (v as "Insufficient Space" | "Shading" | "Structural Issue" | "Consumer Not Willing") }))}>
+                        <SelectTrigger className="border-solar bg-background">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Insufficient Space">Insufficient Space</SelectItem>
+                          <SelectItem value="Shading">Shading</SelectItem>
+                          <SelectItem value="Structural Issue">Structural Issue</SelectItem>
+                          <SelectItem value="Consumer Not Willing">Consumer Not Willing</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -977,7 +1376,7 @@ export default function EditSurveyPage() {
                   <CardTitle className="text-lg text-foreground">Bank Details (Optional)</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="bankDetails.bankName"
@@ -1006,7 +1405,7 @@ export default function EditSurveyPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <FormField
                       control={form.control}
                       name="bankDetails.accountNo"
@@ -1093,7 +1492,7 @@ export default function EditSurveyPage() {
                       {isCapturingLocation ? "Capturing..." : "Capture Location"}
                     </Button>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 items-end">
                     <Input className="border-solar bg-background" value={siteDetails.gpsLat ?? ""} placeholder="Latitude (auto)" onChange={(e) => setSiteDetails((prev) => ({ ...prev, gpsLat: e.target.value }))} />
                     <Input className="border-solar bg-background" value={siteDetails.gpsLng ?? ""} placeholder="Longitude (auto)" onChange={(e) => setSiteDetails((prev) => ({ ...prev, gpsLng: e.target.value }))} />
                   </div>
@@ -1156,6 +1555,7 @@ export default function EditSurveyPage() {
               </div>
             </form>
           </Form>
+        </div>
       </main>
     </div>
   )

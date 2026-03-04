@@ -319,7 +319,7 @@ export default function EditInstallationPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-6 sm:p-8">
+      <div className="min-h-screen p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
     )
@@ -327,7 +327,7 @@ export default function EditInstallationPage() {
 
   if (error || !installation) {
     return (
-      <div className="min-h-screen bg-background p-6 sm:p-8">
+      <div className="min-h-screen p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Installation not found.</p>
         <div className="mt-4">
           <Link href="/installations">
@@ -339,7 +339,7 @@ export default function EditInstallationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <Link href={`/installations/${id}`}>

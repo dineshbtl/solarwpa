@@ -5,7 +5,7 @@ import type React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ArrowLeft, Save, Loader2 } from "lucide-react"
+import { ArrowLeft, Save, Loader2, Eye, EyeOff } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { useState } from "react"
 
@@ -14,27 +14,39 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/hooks/use-toast"
 import type { Role } from "@/lib/rbac"
 import { roleLabel } from "@/lib/rbac"
 import { CreateUserSchema, type CreateUserInput } from "@/lib/store/users"
+import { z } from "zod"
 import { createUser, seedUsers } from "@/lib/data/users"
+import { createUserAction } from "@/app/users/actions"
+import { isSupabaseConfigured } from "@/lib/supabase/config"
+import { INDIAN_STATES, OTHER, getDistrictsForState } from "@/lib/data/india-locations"
+import { getCityOptionsForState, getAllCityOptions } from "@/lib/data/indian-cities"
+
+type CreateUserFormValues = CreateUserInput & { stateOther?: string; districtOther?: string; cityOther?: string }
 
 export default function NewUserPage() {
   const router = useRouter()
 
-  // Ensure dropdowns etc. have seed data available elsewhere.
-  // (Also keeps behavior consistent across a fresh localStorage.)
   seedUsers()
 
-  const form = useForm<CreateUserInput>({
-    resolver: zodResolver(CreateUserSchema),
+  const form = useForm<CreateUserFormValues>({
+    resolver: zodResolver(
+      CreateUserSchema.extend({
+        stateOther: z.string().optional(),
+        districtOther: z.string().optional(),
+        cityOther: z.string().optional(),
+      })
+    ),
     defaultValues: {
       name: "",
       email: "",
       password: "",
-      role: "engineer",
+      role: "",
       status: "active",
       phone: "",
       aadharNo: "",
@@ -42,16 +54,35 @@ export default function NewUserPage() {
       state: "",
       district: "",
       fullAddress: "",
+      stateOther: "",
+      districtOther: "",
+      cityOther: "",
     },
     mode: "onTouched",
   })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const selectedState = form.watch("state")
+  const districts = getDistrictsForState(selectedState === OTHER ? "" : selectedState)
+  const stateOptions = INDIAN_STATES.map((s) => ({ value: s, label: s }))
+  const districtOptions = districts.map((d) => ({ value: d, label: d }))
+  const cityOptions = selectedState && selectedState !== OTHER
+    ? getCityOptionsForState(selectedState)
+    : getAllCityOptions()
 
-  const onSubmit = async (values: CreateUserInput) => {
+  const onSubmit = async (values: CreateUserFormValues) => {
+    const payload: CreateUserInput = {
+      ...values,
+      state: values.state === OTHER ? (values.stateOther ?? "").trim() : values.state,
+      district: values.district === OTHER ? (values.districtOther ?? "").trim() : values.district,
+      city: values.city === OTHER ? (values.cityOther ?? "").trim() : values.city,
+    }
     setIsSubmitting(true)
     try {
-      const user = await createUser(values)
+      const user = isSupabaseConfigured()
+        ? await createUserAction(payload)
+        : await createUser(payload)
       toast({
         title: "User created",
         description: `${user.name} (${roleLabel(user.role)}) was created successfully.`,
@@ -123,9 +154,27 @@ export default function NewUserPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Min 6 characters" autoComplete="new-password" {...field} />
-                    </FormControl>
+                    <div className="relative">
+                      <FormControl>
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Min 6 characters"
+                          autoComplete="new-password"
+                          className="pr-10"
+                          {...field}
+                        />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        onClick={() => setShowPassword((v) => !v)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                      </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -137,13 +186,14 @@ export default function NewUserPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Role</FormLabel>
-                    <Select value={field.value} onValueChange={(v) => field.onChange(v as Role)}>
+                    <Select value={field.value || " "} onValueChange={(v) => field.onChange(v === " " ? "" : v)}>
                       <FormControl>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value=" " disabled>Select role</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                         <SelectItem value="manager">Manager</SelectItem>
                         <SelectItem value="engineer">Engineer</SelectItem>
@@ -206,34 +256,45 @@ export default function NewUserPage() {
                 )}
               />
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="city"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>City</FormLabel>
-                      <FormControl>
-                        <Input placeholder="City" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="state"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State</FormLabel>
-                      <FormControl>
-                        <Input placeholder="State" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <FormField
+                control={form.control}
+                name="state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>State</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        options={stateOptions}
+                        value={field.value || ""}
+                        onValueChange={(v) => {
+                          field.onChange(v)
+                          form.setValue("district", "")
+                          form.setValue("districtOther", "")
+                        }}
+                        placeholder="Select state"
+                        searchPlaceholder="Search state..."
+                        emptyMessage="No state found."
+                        otherOption={{ value: OTHER, label: OTHER }}
+                      />
+                    </FormControl>
+                    {field.value === OTHER && (
+                      <FormField
+                        control={form.control}
+                        name="stateOther"
+                        render={({ field: f }) => (
+                          <FormItem className="mt-2">
+                            <FormLabel className="text-muted-foreground">Specify state</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter state" {...f} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
@@ -242,8 +303,67 @@ export default function NewUserPage() {
                   <FormItem>
                     <FormLabel>District</FormLabel>
                     <FormControl>
-                      <Input placeholder="District" {...field} />
+                      <SearchableSelect
+                        options={districtOptions}
+                        value={field.value || ""}
+                        onValueChange={field.onChange}
+                        placeholder={selectedState ? "Select district" : "Select state first"}
+                        searchPlaceholder="Search district..."
+                        emptyMessage="No district found."
+                        disabled={!selectedState || selectedState === OTHER}
+                        otherOption={districts.length > 0 ? { value: OTHER, label: OTHER } : undefined}
+                      />
                     </FormControl>
+                    {field.value === OTHER && (
+                      <FormField
+                        control={form.control}
+                        name="districtOther"
+                        render={({ field: f }) => (
+                          <FormItem className="mt-2">
+                            <FormLabel className="text-muted-foreground">Specify district</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter district" {...f} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        options={cityOptions}
+                        value={field.value === "" ? "" : (field.value || " ")}
+                        onValueChange={(v) => field.onChange(v === " " ? "" : v)}
+                        placeholder="Select city or Other"
+                        searchPlaceholder="Search city..."
+                        emptyMessage="No city found."
+                        otherOption={{ value: OTHER, label: OTHER }}
+                      />
+                    </FormControl>
+                    {field.value === OTHER && (
+                      <FormField
+                        control={form.control}
+                        name="cityOther"
+                        render={({ field: f }) => (
+                          <FormItem className="mt-2">
+                            <FormLabel className="text-muted-foreground">Specify city / village</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter city or village" {...f} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

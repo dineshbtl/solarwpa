@@ -50,6 +50,7 @@ export type Survey = {
   contractedLoad?: number
   status: "pending" | "approved" | "rejected" | "completed"
   uploadDate: string
+  updatedAt?: string
   approvedDate?: string
   submittedById?: string
   submittedAt: string
@@ -67,6 +68,38 @@ export type Survey = {
     meterAcCableMeters?: number
     meterDcCableMeters?: number
     slabThicknessInches?: number
+    // Rooftop & space
+    availableRoofAreaSqm?: number
+    shadowFreeAreaAvailable?: "Yes" | "No"
+    roofOrientation?: "South" | "East-West" | "Other"
+    roofCondition?: "Good" | "Average" | "Poor"
+    // Rooftop ownership & consent
+    roofOwnership?: "Self" | "Joint" | "Rented"
+    ownerConsentAvailable?: "Yes" | "No"
+    // Shading
+    shadingObjects?: string
+    shadingDuration?: "Nil" | "<1 hr" | "1–2 hrs" | ">2 hrs"
+    // Electrical feasibility
+    distanceRoofToMeterM?: number
+    inverterSpaceAvailable?: "Yes" | "No"
+    existingEarthing?: "Yes" | "No"
+    earthPitsFeasibility?: "Yes" | "No"
+    cableRoutingFeasible?: "Yes" | "No"
+    uscNo?: string
+    dtrCapacity?: string | number
+    ageOfBuildingYears?: number
+    // Documents collected (checkboxes)
+    documentsCollected?: {
+      electricityBill?: boolean
+      aadhaar?: boolean
+      bankDetails?: boolean
+      rooftopPhotos?: boolean
+      meterPhoto?: boolean
+    }
+    // Feasibility result
+    recommendedSystemSizeKw?: number | string
+    overallFeasibility?: "Feasible" | "Not Feasible"
+    notFeasibleReason?: "Insufficient Space" | "Shading" | "Structural Issue" | "Consumer Not Willing"
   }
   siteLocation: {
     section?: string
@@ -75,10 +108,18 @@ export type Survey = {
     circle?: string
     address?: string
     mandal?: string
+    village?: string
     district: string
     pinCode: string
     state?: string
     city?: string
+    latitude?: string
+    longitude?: string
+    electricityConsumerNo?: string
+    connectionType?: "Domestic" | "Other"
+    phase?: "1" | "3"
+    sanctionedLoadKw?: number | string
+    avgMonthlyBillRupees?: number | string
   }
   bankDetails: {
     bankName: string
@@ -164,6 +205,7 @@ export const CreateSurveySchema = z.object({
     circle: OptionalTrimmedString,
     address: OptionalTrimmedString,
     mandal: OptionalTrimmedString,
+    village: OptionalTrimmedString,
     district: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().trim().min(2, "District must be at least 2 characters").max(80).optional()),
     pinCode: z.preprocess(
       (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
@@ -171,6 +213,13 @@ export const CreateSurveySchema = z.object({
     ),
     state: OptionalTrimmedString,
     city: OptionalTrimmedString,
+    latitude: OptionalTrimmedString,
+    longitude: OptionalTrimmedString,
+    electricityConsumerNo: OptionalTrimmedString,
+    connectionType: z.enum(["Domestic", "Other"]).optional(),
+    phase: z.enum(["1", "3"]).optional(),
+    sanctionedLoadKw: z.union([z.string(), z.number()]).optional(),
+    avgMonthlyBillRupees: z.union([z.string(), z.number()]).optional(),
   }),
   bankDetails: z
     .object({
@@ -217,7 +266,36 @@ const SurveySchema: z.ZodType<Survey> = z.object({
       meterAcCableMeters: z.number().optional(),
       meterDcCableMeters: z.number().optional(),
       slabThicknessInches: z.number().optional(),
+      availableRoofAreaSqm: z.number().optional(),
+      shadowFreeAreaAvailable: z.enum(["Yes", "No"]).optional(),
+      roofOrientation: z.enum(["South", "East-West", "Other"]).optional(),
+      roofCondition: z.enum(["Good", "Average", "Poor"]).optional(),
+      roofOwnership: z.enum(["Self", "Joint", "Rented"]).optional(),
+      ownerConsentAvailable: z.enum(["Yes", "No"]).optional(),
+      shadingObjects: z.string().optional(),
+      shadingDuration: z.enum(["Nil", "<1 hr", "1–2 hrs", ">2 hrs"]).optional(),
+      distanceRoofToMeterM: z.number().optional(),
+      inverterSpaceAvailable: z.enum(["Yes", "No"]).optional(),
+      existingEarthing: z.enum(["Yes", "No"]).optional(),
+      earthPitsFeasibility: z.enum(["Yes", "No"]).optional(),
+      cableRoutingFeasible: z.enum(["Yes", "No"]).optional(),
+      uscNo: z.string().optional(),
+      dtrCapacity: z.union([z.string(), z.number()]).optional(),
+      ageOfBuildingYears: z.number().optional(),
+      documentsCollected: z
+        .object({
+          electricityBill: z.boolean().optional(),
+          aadhaar: z.boolean().optional(),
+          bankDetails: z.boolean().optional(),
+          rooftopPhotos: z.boolean().optional(),
+          meterPhoto: z.boolean().optional(),
+        })
+        .optional(),
+      recommendedSystemSizeKw: z.union([z.string(), z.number()]).optional(),
+      overallFeasibility: z.enum(["Feasible", "Not Feasible"]).optional(),
+      notFeasibleReason: z.enum(["Insufficient Space", "Shading", "Structural Issue", "Consumer Not Willing"]).optional(),
     })
+    .passthrough()
     .optional(),
   siteLocation: z.object({
     section: z.string().optional(),
@@ -226,10 +304,18 @@ const SurveySchema: z.ZodType<Survey> = z.object({
     circle: z.string().optional(),
     address: z.string().optional(),
     mandal: z.string().optional(),
+    village: z.string().optional(),
     district: z.string().min(1),
     pinCode: z.string().min(1),
     state: z.string().optional(),
     city: z.string().optional(),
+    latitude: z.string().optional(),
+    longitude: z.string().optional(),
+    electricityConsumerNo: z.string().optional(),
+    connectionType: z.enum(["Domestic", "Other"]).optional(),
+    phase: z.enum(["1", "3"]).optional(),
+    sanctionedLoadKw: z.union([z.string(), z.number()]).optional(),
+    avgMonthlyBillRupees: z.union([z.string(), z.number()]).optional(),
   }),
   bankDetails: z.object({
     bankName: z.string().optional().default(""),

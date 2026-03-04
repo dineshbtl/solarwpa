@@ -71,7 +71,7 @@ export default function SignUpPage() {
 
   if (!supabase) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-green-50 via-emerald-50 to-green-100">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-[#f3f4f6]">
         <Card className="p-8 max-w-md text-center">
           <p className="text-muted-foreground mb-4">Sign up is available when Supabase is configured.</p>
           <Link href="/">
@@ -83,7 +83,7 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-green-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#f3f4f6] flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-background/95 shadow-2xl rounded-2xl overflow-hidden">
         <div className="bg-gradient-dark-green p-6 text-center">
           <h1 className="text-2xl font-bold text-white">Create account</h1>

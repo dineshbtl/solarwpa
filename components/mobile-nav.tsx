@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen, Users, Settings, HelpCircle, LogOut, User } from "lucide-react"
+import { Menu, X, LayoutDashboard, FileText, Zap, CheckCircle, FolderOpen, Users, Settings, HelpCircle, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRole } from "@/contexts/role-context"
 import { getAccessibleRoutes } from "@/lib/route-permissions"
@@ -19,7 +19,6 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 }
 
 const generalItems = [
-  { label: "Profile", href: "/profile", icon: User },
   { label: "Settings", href: "/settings", icon: Settings },
   { label: "Help", href: "/help", icon: HelpCircle },
   { label: "Logout", href: "/logout", icon: LogOut },
@@ -30,15 +29,16 @@ export function MobileNav() {
   const pathname = usePathname()
   const { role } = useRole()
   
-  // Get accessible routes based on role
   const accessibleRoutes = getAccessibleRoutes(role)
-  
-  // Map route configs to menu items
-  const menuItems = accessibleRoutes.map(route => ({
-    label: route.label,
-    href: route.href,
-    icon: iconMap[route.icon] || FolderOpen,
-  }))
+
+  const menuItems = [
+    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    ...accessibleRoutes.map(route => ({
+      label: route.label,
+      href: route.href,
+      icon: iconMap[route.icon] || FolderOpen,
+    })),
+  ]
 
   return (
     <>
@@ -56,7 +56,7 @@ export function MobileNav() {
       {/* Mobile Sidebar */}
       <aside
         className={cn(
-          "lg:hidden fixed top-0 left-0 h-full w-72 bg-background shadow-2xl z-40 transform transition-transform duration-300",
+          "lg:hidden fixed top-0 left-0 h-full w-72 bg-white dark:bg-sidebar shadow-2xl z-40 transform transition-transform duration-300",
           isOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -74,18 +74,33 @@ export function MobileNav() {
             <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">MENU</p>
             {menuItems.map((item) => {
               const Icon = item.icon
-              const isActive = pathname?.startsWith(item.href)
+              const isActive = item.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname?.startsWith(item.href)
               return (
                 <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)}>
                   <button
                     className={cn(
-                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-smooth relative",
-                      isActive ? "text-primary bg-green-50" : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-smooth",
+                      isActive ? "bg-gradient-dark-green text-white shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted",
                     )}
                   >
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-primary-button rounded-r" />
-                    )}
+                    <Icon className="w-5 h-5" />
+                    <span>{item.label}</span>
+                  </button>
+                </Link>
+              )
+            })}
+          </div>
+
+          {/* General Section */}
+          <div className="space-y-2 mt-6 pt-6 border-t border-border">
+            <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">GENERAL</p>
+            {generalItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <Link key={item.href} href={item.href} onClick={() => setIsOpen(false)}>
+                  <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium text-foreground hover:text-foreground hover:bg-muted transition-smooth">
                     <Icon className="w-5 h-5" />
                     <span>{item.label}</span>
                   </button>

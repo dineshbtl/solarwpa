@@ -84,7 +84,7 @@ export default function InstallationDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background relative">
+      <div className="min-h-screen relative">
         <SolarWatermark />
         <main className="mx-auto max-w-7xl px-4 py-8 relative z-10">
           <p className="text-muted-foreground">Loading installation...</p>
@@ -95,7 +95,7 @@ export default function InstallationDetailPage() {
 
   if (error || !installation) {
     return (
-      <div className="min-h-screen bg-background relative">
+      <div className="min-h-screen relative">
         <SolarWatermark />
         <main className="mx-auto max-w-7xl px-4 py-8 relative z-10">
           <p className="text-muted-foreground">{error?.message ?? "Installation not found."}</p>
@@ -108,7 +108,7 @@ export default function InstallationDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background relative">
+    <div className="min-h-screen relative">
       <SolarWatermark />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 relative z-10">
         <Link href="/installations">

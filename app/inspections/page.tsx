@@ -81,7 +81,7 @@ export default function InspectionsPage() {
   const pageItems = filteredInspections.slice(startIndex, endIndex)
 
   return (
-    <div className="min-h-screen bg-background p-6 sm:p-8">
+    <div className="min-h-screen p-6 sm:p-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground">Inspections</h1>
         <p className="mt-1 text-muted-foreground">Review and approve completed installations</p>

@@ -145,23 +145,34 @@ export function useSurveysLazy(options: { pageSize?: number } = {}) {
   const [search, setSearchState] = useState('')
   const [sectionFilter, setSectionFilterState] = useState('')
   const [subDivisionFilter, setSubDivisionFilterState] = useState('')
+  const [statusFilter, setStatusFilterState] = useState('')
+  const [feasibilityFilter, setFeasibilityFilterState] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
+  const buildParams = useCallback(
+    (offset: number, searchTerm: string, section: string, subDivision: string, status: string, feasibility: string) => ({
+      limit: pageSize,
+      offset,
+      search: searchTerm || undefined,
+      section: section || undefined,
+      subDivision: subDivision || undefined,
+      status: status || undefined,
+      feasibility: feasibility || undefined,
+    }),
+    [pageSize]
+  )
+
   const loadPage = useCallback(
-    async (offset: number, searchTerm: string, section: string, subDivision: string, append: boolean) => {
+    async (offset: number, searchTerm: string, section: string, subDivision: string, status: string, feasibility: string, append: boolean) => {
       if (append) setLoadingMore(true)
       else setLoading(true)
       setError(null)
       try {
-        const { items: pageItems, total: totalCount } = await surveysData.listSurveysPaginated({
-          limit: pageSize,
-          offset,
-          search: searchTerm || undefined,
-          section: section || undefined,
-          subDivision: subDivision || undefined,
-        })
+        const { items: pageItems, total: totalCount } = await surveysData.listSurveysPaginated(
+          buildParams(offset, searchTerm, section, subDivision, status, feasibility)
+        )
         setTotal(totalCount)
         if (append) setItems((prev) => [...prev, ...pageItems])
         else setItems(pageItems)
@@ -172,16 +183,16 @@ export function useSurveysLazy(options: { pageSize?: number } = {}) {
         setLoadingMore(false)
       }
     },
-    [pageSize]
+    [buildParams]
   )
 
   const refetch = useCallback(() => {
-    loadPage(0, search, sectionFilter, subDivisionFilter, false)
-  }, [loadPage, search, sectionFilter, subDivisionFilter])
+    loadPage(0, search, sectionFilter, subDivisionFilter, statusFilter, feasibilityFilter, false)
+  }, [loadPage, search, sectionFilter, subDivisionFilter, statusFilter, feasibilityFilter])
 
   const isFirstFilterRun = useRef(true)
   useEffect(() => {
-    loadPage(0, '', '', '', false)
+    loadPage(0, '', '', '', '', '', false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- initial load only
 
   useEffect(() => {
@@ -189,33 +200,29 @@ export function useSurveysLazy(options: { pageSize?: number } = {}) {
       isFirstFilterRun.current = false
       return
     }
-    loadPage(0, search, sectionFilter, subDivisionFilter, false)
-  }, [sectionFilter, subDivisionFilter]) // eslint-disable-line react-hooks/exhaustive-deps -- refetch when filters change
+    loadPage(0, search, sectionFilter, subDivisionFilter, statusFilter, feasibilityFilter, false)
+  }, [sectionFilter, subDivisionFilter, statusFilter, feasibilityFilter]) // eslint-disable-line react-hooks/exhaustive-deps -- refetch when filters change
 
   const loadMore = useCallback(() => {
     if (loading || loadingMore || items.length >= total) return
-    loadPage(items.length, search, sectionFilter, subDivisionFilter, true)
-  }, [loading, loadingMore, items.length, total, search, sectionFilter, subDivisionFilter, loadPage])
+    loadPage(items.length, search, sectionFilter, subDivisionFilter, statusFilter, feasibilityFilter, true)
+  }, [loading, loadingMore, items.length, total, search, sectionFilter, subDivisionFilter, statusFilter, feasibilityFilter, loadPage])
 
   const setSearch = useCallback((q: string) => {
     setSearchState(q)
     setLoading(true)
     setError(null)
     surveysData
-      .listSurveysPaginated({
-        limit: pageSize,
-        offset: 0,
-        search: q || undefined,
-        section: sectionFilter || undefined,
-        subDivision: subDivisionFilter || undefined,
-      })
+      .listSurveysPaginated(
+        buildParams(0, q, sectionFilter, subDivisionFilter, statusFilter, feasibilityFilter)
+      )
       .then(({ items: pageItems, total: totalCount }) => {
         setItems(pageItems)
         setTotal(totalCount)
       })
       .catch((e) => setError(e instanceof Error ? e : new Error(String(e))))
       .finally(() => setLoading(false))
-  }, [pageSize, sectionFilter, subDivisionFilter])
+  }, [buildParams, sectionFilter, subDivisionFilter, statusFilter, feasibilityFilter])
 
   const setSectionFilter = useCallback((v: string) => {
     setSectionFilterState(v)
@@ -223,6 +230,14 @@ export function useSurveysLazy(options: { pageSize?: number } = {}) {
 
   const setSubDivisionFilter = useCallback((v: string) => {
     setSubDivisionFilterState(v)
+  }, [])
+
+  const setStatusFilter = useCallback((v: string) => {
+    setStatusFilterState(v)
+  }, [])
+
+  const setFeasibilityFilter = useCallback((v: string) => {
+    setFeasibilityFilterState(v)
   }, [])
 
   const hasMore = items.length < total
@@ -240,8 +255,12 @@ export function useSurveysLazy(options: { pageSize?: number } = {}) {
     refetch,
     sectionFilter,
     subDivisionFilter,
+    statusFilter,
+    feasibilityFilter,
     setSectionFilter,
     setSubDivisionFilter,
+    setStatusFilter,
+    setFeasibilityFilter,
   }
 }
 

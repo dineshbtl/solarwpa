@@ -9,10 +9,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { toast } from "@/hooks/use-toast"
 import type { Role } from "@/lib/rbac"
 import { permissionsForRole, roleLabel } from "@/lib/rbac"
 import { deleteUser, updateUserRole, seedUsers } from "@/lib/data/users"
+import { deleteUserAction } from "@/app/users/actions"
+import { isSupabaseConfigured } from "@/lib/supabase/config"
 import type { UserStatus } from "@/lib/store/users"
 import { useUsers } from "@/lib/data/hooks"
 
@@ -20,6 +32,7 @@ export default function UsersPage() {
   const [search, setSearch] = useState("")
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all")
   const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all")
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const { data: allUsers = [], refetch } = useUsers()
 
   useEffect(() => {
@@ -58,11 +71,20 @@ export default function UsersPage() {
     }
   }
 
-  const onDelete = async (userId: string) => {
-    const ok = window.confirm("Delete this user? This cannot be undone.")
-    if (!ok) return
+  const onDeleteClick = (user: { id: string; name: string }) => {
+    setDeleteTarget(user)
+  }
+
+  const onDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    const userId = deleteTarget.id
+    setDeleteTarget(null)
     try {
-      await deleteUser(userId)
+      if (isSupabaseConfigured()) {
+        await deleteUserAction(userId)
+      } else {
+        await deleteUser(userId)
+      }
       toast({ title: "User deleted" })
       refetch()
     } catch (e) {
@@ -137,6 +159,7 @@ export default function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Created at</TableHead>
                 <TableHead>Permissions</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -172,12 +195,15 @@ export default function UsersPage() {
                       className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                         (u.status ?? "active") === "active"
                           ? "bg-muted/50 text-green-700"
-                          : "bg-muted text-muted-foreground600"
+                          : "bg-muted text-muted-foreground"
                       }`}
                     >
                       <CircleDot className="mr-1 h-3 w-3" />
                       {(u.status ?? "active") === "active" ? "Active" : "Inactive"}
                     </span>
+                  </TableCell>
+                  <TableCell className="min-w-[140px] text-muted-foreground text-sm whitespace-nowrap">
+                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
                   </TableCell>
                   <TableCell className="min-w-[280px]">
                     <div className="flex flex-wrap gap-2">
@@ -214,7 +240,7 @@ export default function UsersPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onDelete(u.id)}
+                        onClick={() => onDeleteClick({ id: u.id, name: u.name })}
                         className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -225,7 +251,7 @@ export default function UsersPage() {
               ))}
               {users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                     No users found.
                   </TableCell>
                 </TableRow>
@@ -234,6 +260,31 @@ export default function UsersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `This will permanently delete the user "${deleteTarget.name}". This action cannot be undone.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                onDeleteConfirm()
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

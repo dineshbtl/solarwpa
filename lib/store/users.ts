@@ -42,11 +42,12 @@ export const UserSchema = z.object({
   fullAddress: z.string().max(500).optional(),
 })
 
+const roleOptions = ['admin', 'manager', 'engineer', 'surveyor', 'government'] as const
 export const CreateUserSchema = z.object({
   name: z.string().min(2, 'Full name must be at least 2 characters').max(80),
   email: z.string().email('Enter a valid email').max(120),
   password: z.string().min(6, 'Password must be at least 6 characters').max(100),
-  role: RoleSchema,
+  role: z.string().refine((v) => roleOptions.includes(v as (typeof roleOptions)[number]), { message: 'Please select a role' }),
   status: StatusSchema.default('active'),
   phone: z.string().max(20).optional().or(z.literal('')),
   aadharNo: z.string().regex(/^\d{12}$/, 'Aadhaar must be 12 digits').optional().or(z.literal('')),

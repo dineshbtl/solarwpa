@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { createPortal } from "react-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SolarWatermark } from "@/components/solar-watermark"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, MapPin, CheckCircle, XCircle, UserCog, Pencil, FileImage } from "lucide-react"
+import { ArrowLeft, MapPin, CheckCircle, XCircle, UserCog, Pencil, FileImage, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { mockSurveys } from "@/lib/mock-data"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -20,6 +21,279 @@ import { WorkflowSummarySection } from "@/components/workflow-summary-section"
 import { useSurvey } from "@/lib/data/hooks"
 import { Skeleton } from "@/components/ui/skeleton"
 import { isSupabaseConfigured } from "@/lib/supabase/config"
+import type { SurveyUploadKeys } from "@/lib/store/surveys"
+
+const BUCKET = "solar_bucket"
+
+function extractStoragePath(publicUrl: string): string | null {
+  const marker = `/object/public/${BUCKET}/`
+  const idx = publicUrl.indexOf(marker)
+  if (idx >= 0) return publicUrl.slice(idx + marker.length)
+  const marker2 = `/storage/v1/object/public/${BUCKET}/`
+  const idx2 = publicUrl.indexOf(marker2)
+  if (idx2 >= 0) return publicUrl.slice(idx2 + marker2.length)
+  return null
+}
+
+function useSignedUploadUrls(
+  uploads: Record<string, { name?: string; url?: string }> | undefined
+) {
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (!uploads || !isSupabaseConfigured()) return
+    let cancelled = false
+
+    async function resolve() {
+      try {
+        const { getSupabaseBrowserClient } = await import("@/lib/supabase/client")
+        const supabase = getSupabaseBrowserClient()
+        const entries = Object.entries(uploads!).filter(
+          ([, meta]) => meta?.url && !meta.url.startsWith("data:")
+        )
+        if (entries.length === 0) return
+
+        const paths = entries
+          .map(([key, meta]) => {
+            const path = extractStoragePath(meta.url!)
+            return path ? { key, path } : null
+          })
+          .filter(Boolean) as { key: string; path: string }[]
+
+        if (paths.length === 0) return
+
+        const { data, error } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrls(
+            paths.map((p) => p.path),
+            3600
+          )
+
+        if (error || !data || cancelled) return
+        const map: Record<string, string> = {}
+        data.forEach((item, i) => {
+          if (item.signedUrl) map[paths[i].key] = item.signedUrl
+        })
+        if (!cancelled) setSignedUrls(map)
+      } catch {
+        // signed URL generation failed; fall back to stored URLs
+      }
+    }
+
+    resolve()
+    return () => { cancelled = true }
+  }, [uploads])
+
+  return signedUrls
+}
+
+type GalleryItem = { src: string; label: string }
+
+function ImageGalleryLightbox({
+  items,
+  currentIndex,
+  onClose,
+  onNavigate,
+}: {
+  items: GalleryItem[]
+  currentIndex: number
+  onClose: () => void
+  onNavigate: (index: number) => void
+}) {
+  const current = items[currentIndex]
+  const hasPrev = currentIndex > 0
+  const hasNext = currentIndex < items.length - 1
+
+  const goPrev = useCallback(() => { if (hasPrev) onNavigate(currentIndex - 1) }, [hasPrev, onNavigate, currentIndex])
+  const goNext = useCallback(() => { if (hasNext) onNavigate(currentIndex + 1) }, [hasNext, onNavigate, currentIndex])
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+      if (e.key === "ArrowLeft") goPrev()
+      if (e.key === "ArrowRight") goNext()
+    }
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
+  }, [onClose, goPrev, goNext])
+
+  // Lock body scroll while lightbox is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden"
+    return () => { document.body.style.overflow = "" }
+  }, [])
+
+  if (!current) return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 z-[10000] rounded-full bg-white/15 p-2 text-white hover:bg-white/30 transition-colors"
+        aria-label="Close preview"
+      >
+        <X className="h-6 w-6" />
+      </button>
+
+      {/* Counter */}
+      <span className="absolute top-5 left-1/2 -translate-x-1/2 text-sm text-white/70 font-medium">
+        {currentIndex + 1} / {items.length}
+      </span>
+
+      {/* Prev */}
+      {hasPrev && (
+        <button
+          onClick={(e) => { e.stopPropagation(); goPrev() }}
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-[10000] rounded-full bg-white/15 p-3 text-white hover:bg-white/30 transition-colors"
+          aria-label="Previous image"
+        >
+          <ChevronLeft className="h-8 w-8" />
+        </button>
+      )}
+
+      {/* Next */}
+      {hasNext && (
+        <button
+          onClick={(e) => { e.stopPropagation(); goNext() }}
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-[10000] rounded-full bg-white/15 p-3 text-white hover:bg-white/30 transition-colors"
+          aria-label="Next image"
+        >
+          <ChevronRight className="h-8 w-8" />
+        </button>
+      )}
+
+      {/* Image */}
+      <img
+        src={current.src}
+        alt={current.label}
+        className="max-h-[85vh] max-w-[85vw] rounded-lg object-contain shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      />
+
+      {/* Label */}
+      <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-sm text-white/80 bg-black/50 px-4 py-2 rounded-full font-medium">
+        {current.label}
+      </p>
+    </div>,
+    document.body
+  )
+}
+
+function UploadPreview({ src, alt, onClick }: { src: string; alt: string; onClick: () => void }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return (
+      <div className="flex flex-col items-center gap-2 text-muted-foreground p-4">
+        <FileImage className="h-10 w-10" />
+        <span className="text-xs">Image unavailable</span>
+      </div>
+    )
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="h-full w-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+      onError={() => setFailed(true)}
+      onClick={onClick}
+    />
+  )
+}
+
+const UPLOAD_ENTRIES: readonly (readonly [string, string])[] = [
+  ["aadhaarCard", "Aadhar Card Upload"],
+  ["panCard", "PAN Upload"],
+  ["bankProof", "Cancelled Cheque / Pass Book Photo"],
+  ["eBill", "E-Bill Photo"],
+  ["beneficiaryPhoto", "Beneficiary Photo with Site Location (GPRS Cam)"],
+  ["siteLayout", "Site Layout (Draw and Upload)"],
+  ["roofTerraceNorth", "Rooftop terrace (from north location)"],
+  ["roofTerraceSouth", "Rooftop terrace (from south location)"],
+  ["earthingAreaPic", "Earthing Area pic"],
+  ["inverterAreaPic", "Inverter area (pic upload)"],
+] as const
+
+function UploadGallerySection({
+  survey,
+  signedUrls,
+}: {
+  survey: { uploads?: Record<string, { name?: string; url?: string }> }
+  signedUrls: Record<string, string>
+}) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+
+  const galleryItems: GalleryItem[] = []
+  const keyToGalleryIndex: Record<string, number> = {}
+
+  for (const [key, label] of UPLOAD_ENTRIES) {
+    const meta = survey.uploads?.[key]
+    const url = signedUrls[key] || meta?.url
+    if (url) {
+      keyToGalleryIndex[key] = galleryItems.length
+      galleryItems.push({ src: url, label })
+    }
+  }
+
+  return (
+    <>
+      <Card className="border-solar bg-solar-card shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg text-foreground">Uploads (Optional)</CardTitle>
+          <p className="text-sm text-muted-foreground">Aadhar, PAN, Bank Proof, E-Bill, Beneficiary Photo, Site Layout, Site Photos</p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+            {UPLOAD_ENTRIES.map(([key, label]) => {
+              const meta = survey.uploads?.[key]
+              const fileName = meta?.name
+              const imageUrl = signedUrls[key] || meta?.url
+              return (
+                <div key={key} className="overflow-hidden rounded-lg border border-solar bg-white">
+                  <div className="aspect-[4/3] w-full bg-muted flex items-center justify-center overflow-hidden">
+                    {imageUrl ? (
+                      <UploadPreview
+                        src={imageUrl}
+                        alt={label}
+                        onClick={() => setLightboxIndex(keyToGalleryIndex[key] ?? null)}
+                      />
+                    ) : fileName ? (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground p-4">
+                        <FileImage className="h-10 w-10" />
+                        <span className="text-xs">File saved (no preview)</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground p-4">
+                        <FileImage className="h-10 w-10" />
+                        <span className="text-xs">Not uploaded</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 border-t border-solar">
+                    <p className="text-sm font-medium text-foreground">{label}</p>
+                    <p className="text-xs text-muted-foreground truncate">{fileName ?? "—"}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {lightboxIndex !== null && galleryItems.length > 0 && (
+        <ImageGalleryLightbox
+          items={galleryItems}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={(i) => setLightboxIndex(i)}
+        />
+      )}
+    </>
+  )
+}
 
 export default function SurveyDetailPage() {
   const router = useRouter()
@@ -38,6 +312,8 @@ export default function SurveyDetailPage() {
     seedUsers()
   }, [])
 
+  const signedUrls = useSignedUploadUrls(survey?.uploads as Record<string, { name?: string; url?: string }> | undefined)
+
   useEffect(() => {
     if (survey?.installerId) setInstallerId(survey.installerId)
     else if (survey) setInstallerId("__none__")
@@ -45,7 +321,7 @@ export default function SurveyDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background relative">
+      <div className="min-h-screen relative">
         <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 relative z-10">
           <Skeleton className="mb-3 h-5 w-16" />
           <div className="space-y-3">
@@ -60,7 +336,7 @@ export default function SurveyDetailPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background p-6 sm:p-8">
+      <div className="min-h-screen p-6 sm:p-8">
         <p className="text-destructive">Failed to load survey.</p>
         <Link href="/surveys">
           <Button variant="outline" className="mt-4">Back to Surveys</Button>
@@ -71,7 +347,7 @@ export default function SurveyDetailPage() {
 
   if (!survey) {
     return (
-      <div className="min-h-screen bg-background p-6 sm:p-8">
+      <div className="min-h-screen p-6 sm:p-8">
         <p className="text-muted-foreground">Survey not found.</p>
         <Link href="/surveys">
           <Button variant="outline" className="mt-4">Back to Surveys</Button>
@@ -255,7 +531,7 @@ export default function SurveyDetailPage() {
   const gpsLng = isStored ? (survey.siteDetails?.gpsLng ?? dummy.gps) : (survey.gpsLocation?.lng != null ? String(survey.gpsLocation.lng) : dummy.gps)
 
   return (
-    <div className="min-h-screen bg-background relative">
+    <div className="min-h-screen relative">
       <SolarWatermark />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 relative z-10">
         <Link href="/surveys">
@@ -265,6 +541,7 @@ export default function SurveyDetailPage() {
           </Button>
         </Link>
 
+        <div className="rounded-2xl bg-white shadow-xl border border-border p-4 sm:p-6">
         <div className="space-y-6">
           {/* Header */}
           <Card className="border-solar bg-solar-card shadow-sm">
@@ -328,20 +605,89 @@ export default function SurveyDetailPage() {
             inspectionDate={linkedInspection?.createdAt ? new Date(linkedInspection.createdAt).toLocaleString() : "—"}
           />
 
-          {/* 1. Beneficiary Details — same section order as survey form */}
+          {/* 1. Consumer Details */}
+          <Card className="border-solar bg-solar-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Consumer Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Name</p>
+                  <p className="mt-1 text-sm text-foreground capitalize">{beneficiaryName}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Mobile No.</p>
+                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.mobile : undefined, dummy.mobile)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Electricity Consumer No.</p>
+                  <p className="mt-1 text-sm text-foreground">{v(siteLocation.electricityConsumerNo, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">DISCOM</p>
+                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.discomName : undefined, dummy.discom)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Connection Type</p>
+                  <p className="mt-1 text-sm text-foreground">{v(siteLocation.connectionType, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Phase</p>
+                  <p className="mt-1 text-sm text-foreground">{v(siteLocation.phase, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Sanctioned Load (kW)</p>
+                  <p className="mt-1 text-sm text-foreground">{siteLocation.sanctionedLoadKw != null && siteLocation.sanctionedLoadKw !== "" ? String(siteLocation.sanctionedLoadKw) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Avg. Monthly Bill (₹)</p>
+                  <p className="mt-1 text-sm text-foreground">{siteLocation.avgMonthlyBillRupees != null && siteLocation.avgMonthlyBillRupees !== "" ? String(siteLocation.avgMonthlyBillRupees) : "—"}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Address</p>
+                <p className="mt-1 text-sm text-foreground">{v(siteLocation.address ?? (survey as any).address, dummy.address)}</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Mandal</p>
+                  <p className="mt-1 text-sm text-foreground capitalize">{v(siteLocation.mandal, dummy.mandal)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Village</p>
+                  <p className="mt-1 text-sm text-foreground capitalize">{v(siteLocation.village, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Pincode</p>
+                  <p className="mt-1 text-sm text-foreground">{v(siteLocation.pinCode, dummy.pin)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Latitude</p>
+                  <p className="mt-1 text-sm text-foreground">{v(siteLocation.latitude ?? survey.siteDetails?.gpsLat, gpsLat)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Longitude</p>
+                  <p className="mt-1 text-sm text-foreground">{v(siteLocation.longitude ?? survey.siteDetails?.gpsLng, gpsLng)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Beneficiary Details (surveyor, name, service no, aadhar, pan, mobile) */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg text-foreground">Beneficiary Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Surveyor (submitted by)</p>
                   <p className="mt-1 text-sm text-foreground">{surveyorName}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Name of the Beneficiary</p>
-                  <p className="mt-1 text-sm text-foreground">{beneficiaryName}</p>
+                  <p className="mt-1 text-sm text-foreground capitalize">{beneficiaryName}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Service No</p>
@@ -373,7 +719,7 @@ export default function SurveyDetailPage() {
               <CardTitle className="text-lg text-foreground">Site Location</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
                 <div><p className="text-sm font-medium text-muted-foreground">Section</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.section, dummy.section)}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Sub Division</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.subDivision, dummy.subDiv)}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Division</p><p className="mt-1 text-sm text-foreground">{v(siteLocation.division, dummy.division)}</p></div>
@@ -391,13 +737,125 @@ export default function SurveyDetailPage() {
             </CardContent>
           </Card>
 
+          {/* 2. Rooftop Ownership & Consent */}
+          <Card className="border-solar bg-solar-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Rooftop Ownership &amp; Consent</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 items-end">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Roof Ownership</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.roofOwnership, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Owner Consent Available (if applicable)</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.ownerConsentAvailable, "—")}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 3. Rooftop & Space Details */}
+          <Card className="border-solar bg-solar-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Rooftop &amp; Space Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Roof Type</p>
+                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.roofType : undefined, dummy.roofType)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Available Roof Area (approx.)</p>
+                  <p className="mt-1 text-sm text-foreground">{survey.siteDetails?.availableRoofAreaSqm != null ? `${survey.siteDetails.availableRoofAreaSqm} sq.m` : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Shadow-free area available</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.shadowFreeAreaAvailable, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Roof Orientation</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.roofOrientation, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Roof Condition</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.roofCondition, "—")}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 4. Shading & Obstructions */}
+          <Card className="border-solar bg-solar-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Shading &amp; Obstructions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 items-end">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Nearby shading objects</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.shadingObjects, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Shading Duration</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.shadingDuration, "—")}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 5. Electrical Feasibility */}
+          <Card className="border-solar bg-solar-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Electrical Feasibility</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Distance Roof to Meter (m)</p>
+                  <p className="mt-1 text-sm text-foreground">{survey.siteDetails?.distanceRoofToMeterM != null ? String(survey.siteDetails.distanceRoofToMeterM) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Inverter installation space available</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.inverterSpaceAvailable, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Existing Earthing</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.existingEarthing, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Earth Pits Feasibility</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.earthPitsFeasibility, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Cable routing feasible</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.cableRoutingFeasible, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">USC No</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.uscNo, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">DTR Capacity</p>
+                  <p className="mt-1 text-sm text-foreground">{survey.siteDetails?.dtrCapacity != null ? String(survey.siteDetails.dtrCapacity) : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Age of the Building</p>
+                  <p className="mt-1 text-sm text-foreground">{survey.siteDetails?.ageOfBuildingYears != null ? String(survey.siteDetails.ageOfBuildingYears) : "—"}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 3. Plant & Roof Details */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg text-foreground">Plant & Roof Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
                 <div><p className="text-sm font-medium text-muted-foreground">Type of Solar Power Plant</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.plantType : undefined, dummy.plantType)}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Building Height</p><p className="mt-1 text-sm text-foreground">{survey.buildingHeight != null && survey.buildingHeight > 0 ? String(survey.buildingHeight) : dummy.height}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Total No of Roofs</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.totalRoofs : undefined, dummy.roofs)}</p></div>
@@ -409,13 +867,36 @@ export default function SurveyDetailPage() {
             </CardContent>
           </Card>
 
+          {/* 6. Feasibility Result (Surveyor Assessment) */}
+          <Card className="border-solar bg-solar-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Feasibility Result (Surveyor Assessment)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Recommended System Size</p>
+                  <p className="mt-1 text-sm text-foreground">{survey.siteDetails?.recommendedSystemSizeKw != null ? `${survey.siteDetails.recommendedSystemSizeKw} kW` : "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Overall Feasibility</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.overallFeasibility, "—")}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">If Not Feasible, Reason</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.siteDetails?.notFeasibleReason, "—")}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 4. Bank Details */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg text-foreground">Bank Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
                 <div><p className="text-sm font-medium text-muted-foreground">Bank Name</p><p className="mt-1 text-sm text-foreground">{v(bankDetails.bankName, dummy.bankName)}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Branch</p><p className="mt-1 text-sm text-foreground">{v(bankDetails.branch, dummy.branch)}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Account No</p><p className="mt-1 text-sm text-foreground">{v(bankDetails.accountNo, dummy.account)}</p></div>
@@ -431,11 +912,11 @@ export default function SurveyDetailPage() {
               <p className="text-sm text-muted-foreground">Capture location to auto-fill site details</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 items-end">
                 <div><p className="text-sm font-medium text-muted-foreground">Latitude</p><p className="mt-1 text-sm text-foreground">{gpsLat}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Longitude</p><p className="mt-1 text-sm text-foreground">{gpsLng}</p></div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 items-end">
                 <div><p className="text-sm font-medium text-muted-foreground">GPS Accuracy (m)</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.accuracyMeters != null ? String(survey.siteDetails.accuracyMeters) : dummy.gps}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Captured At</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.capturedAt ? new Date(survey.siteDetails.capturedAt).toLocaleString() : dummy.captured}</p></div>
               </div>
@@ -460,71 +941,7 @@ export default function SurveyDetailPage() {
           </Card>
 
           {/* 6. Uploads (Optional) */}
-          <Card className="border-solar bg-solar-card shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg text-foreground">Uploads (Optional)</CardTitle>
-              <p className="text-sm text-muted-foreground">Aadhar, PAN, Bank Proof, E-Bill, Beneficiary Photo, Site Layout, Site Photos</p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {(
-                  [
-                    ["aadhaarCard", "Aadhar Card Upload"],
-                    ["panCard", "PAN Upload"],
-                    ["bankProof", "Cancelled Cheque / Pass Book Photo"],
-                    ["eBill", "E-Bill Photo"],
-                    ["beneficiaryPhoto", "Beneficiary Photo with Site Location (GPRS Cam)"],
-                    ["siteLayout", "Site Layout (Draw and Upload)"],
-                    ["roofTerraceNorth", "Rooftop terrace (from north location)"],
-                    ["roofTerraceSouth", "Rooftop terrace (from south location)"],
-                    ["earthingAreaPic", "Earthing Area pic"],
-                  ] as const
-                ).map(([key, label]) => {
-                  const meta = survey.uploads?.[key] as { name?: string; url?: string } | undefined
-                  const fileName = meta?.name
-                  const imageUrl = meta?.url
-                  const isDataUrl = typeof imageUrl === "string" && imageUrl.startsWith("data:")
-                  return (
-                    <div key={key} className="overflow-hidden rounded-lg border border-solar bg-background">
-                      <div className="aspect-[4/3] w-full bg-muted flex items-center justify-center overflow-hidden">
-                        {imageUrl ? (
-                          <div className="relative h-full w-full">
-                            <img
-                              src={imageUrl}
-                              alt={label}
-                              className="h-full w-full object-cover"
-                              referrerPolicy={isDataUrl ? undefined : "no-referrer"}
-                              crossOrigin={isDataUrl ? undefined : "anonymous"}
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none"
-                                const fallback = e.currentTarget.nextElementSibling as HTMLElement | null
-                                if (fallback) fallback.classList.remove("hidden")
-                              }}
-                            />
-                            <div className="absolute inset-0 hidden flex flex-col items-center justify-center gap-2 bg-muted text-muted-foreground p-4 survey-upload-fallback">
-                              <FileImage className="h-10 w-10" />
-                              <span className="text-xs">Image unavailable</span>
-                            </div>
-                          </div>
-                        ) : fileName ? (
-                          <img src="/placeholder.svg?height=200&width=280&text=Document" alt={label} className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex flex-col items-center gap-2 text-muted-foreground p-4">
-                            <FileImage className="h-10 w-10" />
-                            <span className="text-xs">Not uploaded</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-3 border-t border-solar">
-                        <p className="text-sm font-medium text-foreground">{label}</p>
-                        <p className="text-xs text-muted-foreground truncate">{fileName ?? "—"}</p>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
+          <UploadGallerySection survey={survey} signedUrls={signedUrls} />
 
           {isStored && (
             <Card className="border-solar bg-solar-card shadow-sm">
@@ -801,6 +1218,7 @@ export default function SurveyDetailPage() {
               </CardContent>
             </Card>
           )}
+        </div>
         </div>
       </main>
     </div>

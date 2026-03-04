@@ -15,16 +15,18 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   const { role, currentUser } = useRole()
 
   useEffect(() => {
-    // Skip protection for public pages
     const publicPages = ["/", "/signup", "/logout", "/login"]
     if (publicPages.includes(pathname)) return
 
-    // Skip if user not loaded yet
     if (!currentUser) return
 
-    // Check if user can access this route
+    // Block inactive users — sign out and redirect to login
+    if (currentUser.status === "inactive") {
+      router.push("/logout")
+      return
+    }
+
     if (!canAccessRoute(role, pathname)) {
-      // Redirect to dashboard if no access
       router.push("/dashboard")
     }
   }, [pathname, role, currentUser, router])
@@ -50,7 +52,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
             <div className="hidden lg:block">
               <TopHeader />
             </div>
-            <main className="flex-1 overflow-y-auto bg-background pt-16 lg:pt-0 overscroll-none">{children}</main>
+            <main className="flex-1 overflow-y-auto bg-page pt-16 lg:pt-0 overscroll-none">{children}</main>
           </div>
         </div>
       </RouteGuard>

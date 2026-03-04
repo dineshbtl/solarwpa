@@ -1,6 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/supabase/database.types'
 
+/** Server-only: read SUPABASE_SERVICE_ROLE_KEY from .env.local if not in process.env (e.g. some Server Action contexts). */
+function getServiceRoleKeyFromEnvFile(): string | undefined {
+  if (typeof window !== 'undefined') return undefined
+  try {
+    const fs = require('fs')
+    const path = require('path')
+    const envPath = path.join(process.cwd(), '.env.local')
+    if (!fs.existsSync(envPath)) return undefined
+    const content = fs.readFileSync(envPath, 'utf8')
+    const line = content
+      .split(/\r?\n/)
+      .find((l: string) => /^\s*SUPABASE_SERVICE_ROLE_KEY\s*=/.test(l.trim()))
+    if (!line) return undefined
+    const match = line.match(/SUPABASE_SERVICE_ROLE_KEY\s*=\s*(.+)/)
+    const value = match?.[1]?.trim().replace(/^["']|["']$/g, '')
+    return value || undefined
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * Browser-safe Supabase client for self-hosted or cloud Supabase.
  * Uses NEXT_PUBLIC_ env vars so it works in the browser.
@@ -87,10 +108,19 @@ let adminClient: ReturnType<typeof createClient<Database>> | null = null
 
 export function getSupabaseAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  // Check both private and public (NEXT_PUBLIC_) versions of the key
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) {
-    throw new Error('Admin client requires SUPABASE_SERVICE_ROLE_KEY env var')
+  // Check process.env first, then .env.local (for Server Actions where env may not be passed)
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ||
+    getServiceRoleKeyFromEnvFile()
+  if (!url) {
+    throw new Error('Admin client requires NEXT_PUBLIC_SUPABASE_URL in .env.local (required for server-side Supabase)')
+  }
+  if (!serviceKey) {
+    throw new Error(
+      'Admin client requires SUPABASE_SERVICE_ROLE_KEY in .env.local. ' +
+        'Get it from Supabase: Project Settings → API → service_role key. Restart the dev server after adding it.'
+    )
   }
   if (!adminClient) {
     adminClient = createClient<Database>(url, serviceKey, {
