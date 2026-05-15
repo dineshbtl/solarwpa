@@ -5,8 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { MapPin, Wrench, Clock, CheckCircle } from "lucide-react"
 import { AppNav } from "@/components/navigation/app-nav"
+import { useRole } from "@/contexts/role-context"
+import { hasAnyPermissionFromMap } from "@/lib/rbac"
+import { INSTALLATIONS_CREATE_PERMISSIONS } from "@/lib/route-permissions"
 
 export function SurveyorDashboard() {
+  const { role, permissionMap } = useRole()
+  const canCreateInstallation = hasAnyPermissionFromMap(role, INSTALLATIONS_CREATE_PERMISSIONS, permissionMap)
   const stats = [
     { label: "Pending Surveys", value: "8", icon: MapPin, color: "text-orange-600" },
     { label: "Active Installations", value: "3", icon: Wrench, color: "text-blue-600" },
@@ -51,25 +56,27 @@ export function SurveyorDashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat) => {
-            const Icon = stat.icon
-            return (
-              <Card key={stat.label} className="bg-white border-border">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-neutral-600 mb-1">{stat.label}</p>
-                      <p className="text-3xl font-bold text-neutral-900">{stat.value}</p>
+        <div className="mb-8 overflow-x-auto pb-2 md:overflow-visible md:pb-0">
+          <div className="flex min-w-max gap-6 md:min-w-0 md:grid md:grid-cols-2 lg:grid-cols-4">
+            {stats.map((stat) => {
+              const Icon = stat.icon
+              return (
+                <Card key={stat.label} className="w-[280px] shrink-0 bg-white border-border md:w-auto md:shrink">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-neutral-600 mb-1">{stat.label}</p>
+                        <p className="text-3xl font-bold text-neutral-900">{stat.value}</p>
+                      </div>
+                      <div className={cn("p-3 rounded-full bg-neutral-100", stat.color)}>
+                        <Icon className="w-6 h-6" />
+                      </div>
                     </div>
-                    <div className={cn("p-3 rounded-full bg-neutral-100", stat.color)}>
-                      <Icon className="w-6 h-6" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
         </div>
 
         {/* Quick Actions */}
@@ -85,12 +92,14 @@ export function SurveyorDashboard() {
                   New Site Survey
                 </Button>
               </Link>
-              <Link href="/installations/new">
-                <Button className="w-full bg-[#2d2d2d] hover:bg-[#3d3d3d]">
-                  <Wrench className="w-5 h-5 mr-2" />
-                  Start Installation
-                </Button>
-              </Link>
+              {canCreateInstallation ? (
+                <Link href="/installations/new">
+                  <Button className="w-full bg-[#2d2d2d] hover:bg-[#3d3d3d]">
+                    <Wrench className="w-5 h-5 mr-2" />
+                    Start Installation
+                  </Button>
+                </Link>
+              ) : null}
             </div>
           </CardContent>
         </Card>

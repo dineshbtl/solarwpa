@@ -1,26 +1,41 @@
 /**
- * Unified data layer: Supabase when configured, else localStorage store.
+ * Inspection data from Supabase only.
  */
-import { isSupabaseConfigured } from '@/lib/supabase/config'
-import * as store from '@/lib/store/inspections'
+import { assertSupabaseConfigured } from '@/lib/supabase/config'
 import * as supabase from '@/lib/supabase/inspections'
 import type { Inspection, InspectionStatus } from '@/lib/store/inspections'
+import type { InspectionListItem, ListInspectionsParams } from '@/lib/supabase/inspections'
 
-export type { Inspection, InspectionStatus }
+export type { Inspection, InspectionStatus, InspectionListItem, ListInspectionsParams }
+
+export async function listInspectionsPaginated(
+  params: ListInspectionsParams
+): Promise<{ items: InspectionListItem[]; total: number }> {
+  assertSupabaseConfigured()
+  return supabase.listInspectionsFromSupabasePaginated(params)
+}
+
+/** One shared in-flight list fetch avoids duplicate heavy selects. */
+let listInspectionsInflight: Promise<Inspection[]> | null = null
 
 export async function listInspections(): Promise<Inspection[]> {
-  if (isSupabaseConfigured()) return supabase.listInspectionsFromSupabase()
-  return Promise.resolve(store.listInspections())
+  assertSupabaseConfigured()
+  if (!listInspectionsInflight) {
+    listInspectionsInflight = supabase.listInspectionsFromSupabase().finally(() => {
+      listInspectionsInflight = null
+    })
+  }
+  return listInspectionsInflight
 }
 
 export async function getInspectionById(id: string): Promise<Inspection | undefined> {
-  if (isSupabaseConfigured()) return supabase.getInspectionByIdFromSupabase(id)
-  return Promise.resolve(store.getInspectionById(id))
+  assertSupabaseConfigured()
+  return supabase.getInspectionByIdFromSupabase(id)
 }
 
 export async function getInspectionByInstallationId(installationId: string): Promise<Inspection | undefined> {
-  if (isSupabaseConfigured()) return supabase.getInspectionByInstallationIdFromSupabase(installationId)
-  return Promise.resolve(store.getInspectionByInstallationId(installationId))
+  assertSupabaseConfigured()
+  return supabase.getInspectionByInstallationIdFromSupabase(installationId)
 }
 
 export async function createInspection(input: {
@@ -30,26 +45,26 @@ export async function createInspection(input: {
   customerName: string
   address: string
 }): Promise<Inspection> {
-  if (isSupabaseConfigured()) return supabase.createInspectionInSupabase(input)
-  return Promise.resolve(store.createInspection(input))
+  assertSupabaseConfigured()
+  return supabase.createInspectionInSupabase(input)
 }
 
 export async function updateInspectionStatus(id: string, status: InspectionStatus): Promise<Inspection> {
-  if (isSupabaseConfigured()) return supabase.updateInspectionStatusInSupabase(id, status)
-  return Promise.resolve(store.updateInspectionStatus(id, status))
+  assertSupabaseConfigured()
+  return supabase.updateInspectionStatusInSupabase(id, status)
 }
 
 export async function assignInspectionInspector(id: string, inspectorId?: string): Promise<Inspection> {
-  if (isSupabaseConfigured()) return supabase.assignInspectionInspectorInSupabase(id, inspectorId)
-  return Promise.resolve(store.assignInspectionInspector(id, inspectorId))
+  assertSupabaseConfigured()
+  return supabase.assignInspectionInspectorInSupabase(id, inspectorId)
 }
 
 export async function updateInspectionDetails(
   id: string,
   patch: { customerName: string; address: string; inspectorId?: string }
 ): Promise<Inspection> {
-  if (isSupabaseConfigured()) return supabase.updateInspectionDetailsInSupabase(id, patch)
-  return Promise.resolve(store.updateInspectionDetails(id, patch))
+  assertSupabaseConfigured()
+  return supabase.updateInspectionDetailsInSupabase(id, patch)
 }
 
 export async function setManagerApproval(
@@ -58,8 +73,8 @@ export async function setManagerApproval(
   remarks: string,
   approvedBy?: string
 ): Promise<Inspection> {
-  if (isSupabaseConfigured()) return supabase.setManagerApprovalInSupabase(id, approved, remarks, approvedBy)
-  return Promise.resolve(store.setManagerApproval(id, approved, remarks, approvedBy))
+  assertSupabaseConfigured()
+  return supabase.setManagerApprovalInSupabase(id, approved, remarks, approvedBy)
 }
 
 export async function setGovernmentInspection(
@@ -68,6 +83,6 @@ export async function setGovernmentInspection(
   remarks: string,
   inspectorName?: string
 ): Promise<Inspection> {
-  if (isSupabaseConfigured()) return supabase.setGovernmentInspectionInSupabase(id, approved, remarks, inspectorName)
-  return Promise.resolve(store.setGovernmentInspection(id, approved, remarks, inspectorName))
+  assertSupabaseConfigured()
+  return supabase.setGovernmentInspectionInSupabase(id, approved, remarks, inspectorName)
 }

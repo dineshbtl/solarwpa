@@ -4,6 +4,24 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
+/** App-side caches written by RoleContext / TopHeader / shared stores. Wipe on logout. */
+const APP_CACHE_KEYS = [
+  "solarepc.currentRole",
+  "solarepc.permissionMap",
+  "solarepc.currentUser",
+]
+
+function clearAppCaches() {
+  if (typeof window === "undefined") return
+  try {
+    for (const key of APP_CACHE_KEYS) {
+      window.localStorage.removeItem(key)
+    }
+  } catch {
+    // localStorage unavailable — ignore
+  }
+}
+
 export default function LogoutPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
@@ -20,6 +38,7 @@ export default function LogoutPage() {
         const signOutPromise = supabase.auth.signOut()
         
         await Promise.race([signOutPromise, timeoutPromise])
+        clearAppCaches()
         
         // Always redirect, even if sign out failed
         if (isMounted) {
@@ -27,7 +46,8 @@ export default function LogoutPage() {
           router.refresh()
         }
       } catch (err) {
-        // If anything fails, still redirect to home
+        // If anything fails, still clear local caches + redirect to home
+        clearAppCaches()
         if (isMounted) {
           router.replace("/")
           router.refresh()

@@ -6,13 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Camera, MapPin, Upload, Loader2 } from "lucide-react"
+import { ArrowLeft, Camera, MapPin, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
+import { useFormDraft } from "@/lib/store/use-form-draft"
+import { DraftBanner } from "@/components/draft-banner"
 import {
   Form,
   FormControl,
@@ -22,17 +24,15 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CreateSurveySchema, type CreateSurveyInput, type FileMeta, type SurveyUploadKeys } from "@/lib/store/surveys"
+import { CreateSurveySchema, SURVEY_UPLOAD_KEYS_ORDER, type CreateSurveyInput, type FileMeta, type SurveyUploadKeys } from "@/lib/store/surveys"
 import * as surveysData from "@/lib/data/surveys"
-import { createSurveyWithFormDataAction } from "@/app/actions/surveys"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
-import { seedUsers } from "@/lib/store/users"
 import { useRole } from "@/contexts/role-context"
 import { useProjects } from "@/lib/data/hooks"
 import { siteLocationOptions } from "@/lib/data/site-location-options"
 import { LocationAutocomplete } from "@/components/location-autocomplete"
 import { getCurrentLocation as getGeoLocation } from "@/lib/geolocation"
-import { compressImage } from "@/lib/image-compress"
+import { preparePhotoWithGpsStamp } from "@/lib/photo-gps-stamp"
+import { stampOptionsFromSurveySiteDetails } from "@/lib/survey-photo-stamp"
 
 type UploadState = Partial<Record<SurveyUploadKeys, File>>
 
@@ -75,6 +75,10 @@ function ImagePreview({ file, className }: { file: File; className?: string }) {
 export default function NewSurveyPage() {
   const router = useRouter()
   const [uploads, setUploads] = useState<UploadState>({})
+  const uploadsRef = useRef<UploadState>({})
+  useEffect(() => {
+    uploadsRef.current = uploads
+  }, [uploads])
   const [siteDetails, setSiteDetails] = useState<{
     gpsLat?: string
     gpsLng?: string
@@ -107,13 +111,9 @@ export default function NewSurveyPage() {
   const [isCapturingLocation, setIsCapturingLocation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { currentUser } = useRole()
-  const { data: projects = [] } = useProjects()
+  const { data: projects = [], loading: projectsLoading, error: projectsError } = useProjects()
 
   const locationCaptured = Boolean(siteDetails.gpsLat && siteDetails.gpsLng)
-
-  useEffect(() => {
-    seedUsers()
-  }, [])
 
   const form = useForm<CreateSurveyInput>({
     resolver: zodResolver(CreateSurveySchema),
@@ -155,10 +155,47 @@ export default function NewSurveyPage() {
         ifsc: "",
         branch: "",
       },
-      remarks: "",
     },
     mode: "onTouched",
   })
+
+  // Persist text fields to localStorage so a hanging save / refresh doesn't wipe a long survey entry.
+  // Files (photos) are intentionally excluded — File objects don't survive serialisation and photos
+  // are too large for localStorage; the user re-attaches them after restore.
+  const watchedValues = form.watch()
+  const draftPayload = useMemo(
+    () => ({ values: watchedValues, siteDetails }),
+    [watchedValues, siteDetails],
+  )
+  const surveyDraft = useFormDraft<{ values: CreateSurveyInput; siteDetails: typeof siteDetails }>(
+    "surveys.new",
+    draftPayload,
+  )
+  const [draftBannerOpen, setDraftBannerOpen] = useState(false)
+  const [draftBannerSavedAt, setDraftBannerSavedAt] = useState<string | null>(null)
+  const draftCheckedRef = useRef(false)
+
+  useEffect(() => {
+    if (draftCheckedRef.current) return
+    draftCheckedRef.current = true
+    if (surveyDraft.hasDraft()) {
+      setDraftBannerSavedAt(surveyDraft.peekSavedAt())
+      setDraftBannerOpen(true)
+    }
+  }, [surveyDraft])
+
+  const handleRestoreDraft = () => {
+    const d = surveyDraft.restore()
+    if (d?.values) form.reset(d.values)
+    if (d?.siteDetails) setSiteDetails(d.siteDetails)
+    setDraftBannerOpen(false)
+    toast({ title: "Draft restored", description: "Re-attach any photos before submitting." })
+  }
+
+  const handleDiscardDraft = () => {
+    surveyDraft.clear()
+    setDraftBannerOpen(false)
+  }
 
   const uploadLabels: Record<SurveyUploadKeys, string> = useMemo(
     () => ({
@@ -229,11 +266,12 @@ export default function NewSurveyPage() {
   const onSubmit = async (values: CreateSurveyInput) => {
     setIsSubmitting(true)
     try {
+      const files = uploadsRef.current
       const uploadMeta: Partial<Record<SurveyUploadKeys, FileMeta>> = {}
-      ;(Object.keys(uploads) as SurveyUploadKeys[]).forEach((k) => {
-        const f = uploads[k]
+      for (const k of SURVEY_UPLOAD_KEYS_ORDER) {
+        const f = files[k]
         if (f) uploadMeta[k] = toMeta(f)
-      })
+      }
 
       // Enforce GPRS Cam flow: beneficiary photo should only be selectable after location captured.
       // (We already disable the input, but this double-checks in case of any edge case.)
@@ -246,21 +284,8 @@ export default function NewSurveyPage() {
         return
       }
 
-      const hasNewFiles = Object.keys(uploads).some((k) => uploads[k as SurveyUploadKeys])
-      if (isSupabaseConfigured() && hasNewFiles) {
-        const formData = new FormData()
-        formData.set("input", JSON.stringify(values))
-        formData.set("siteDetails", JSON.stringify(siteDetails))
-        formData.set("submittedById", currentUser?.id ?? "")
-        formData.set("meta", JSON.stringify(uploadMeta))
-        for (const k of Object.keys(uploads) as SurveyUploadKeys[]) {
-          const f = uploads[k]
-          if (f) formData.append(`file_${k}`, f)
-        }
-        await createSurveyWithFormDataAction(formData)
-      } else {
-        await surveysData.createSurvey(values, uploadMeta, siteDetails, currentUser?.id ?? undefined, uploads)
-      }
+      await surveysData.createSurvey(values, uploadMeta, siteDetails, currentUser?.id ?? undefined, files)
+      surveyDraft.clear()
       toast({ title: "Survey submitted", description: "Survey was saved successfully." })
       router.push("/surveys")
     } catch (e) {
@@ -286,8 +311,16 @@ export default function NewSurveyPage() {
       return
     }
     if (f) {
-      const compressed = await compressImage(f)
-      setUpload(k, compressed)
+      try {
+        const prepared = await preparePhotoWithGpsStamp(f, stampOptionsFromSurveySiteDetails(siteDetails))
+        setUpload(k, prepared.file)
+      } catch {
+        toast({
+          title: "Could not process image",
+          description: "Try another photo or a smaller file. If this keeps happening, capture site location first.",
+          variant: "destructive",
+        })
+      }
     } else {
       setUpload(k, undefined)
     }
@@ -305,7 +338,6 @@ export default function NewSurveyPage() {
   }) => {
     const file = uploads[k]
     const cameraId = `camera_${k}`
-    const libraryId = `library_${k}`
     return (
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between rounded-lg border border-solar bg-background p-4">
         <div className="min-w-0 flex-1">
@@ -324,40 +356,22 @@ export default function NewSurveyPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {/* Camera: uses native <label> trigger – reliable on mobile */}
+          {/* Camera/Gallery: allows both camera capture and selecting existing images */}
           <label
             htmlFor={disabled ? undefined : cameraId}
             className={`inline-flex items-center justify-center gap-2 rounded-md border border-solar bg-background px-4 py-2 text-sm font-medium cursor-pointer hover:bg-accent hover:text-accent-foreground ${disabled ? "opacity-50 pointer-events-none" : ""}`}
           >
             <Camera className="h-4 w-4" />
-            Take Photo
+            Camera / Gallery
             <input
               id={cameraId}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               disabled={disabled}
               onChange={(e) => handleFileSelect(k, e)}
             />
           </label>
-          {/* Library: uses native <label> trigger – reliable on mobile */}
-          <label
-            htmlFor={disabled ? undefined : libraryId}
-            className={`inline-flex items-center justify-center gap-2 rounded-md border border-solar bg-background px-4 py-2 text-sm font-medium cursor-pointer hover:bg-accent hover:text-accent-foreground ${disabled ? "opacity-50 pointer-events-none" : ""}`}
-          >
-            <Upload className="h-4 w-4" />
-            {file ? "Replace" : "Choose from Library"}
-            <input
-              id={libraryId}
-              type="file"
-              accept="image/*,.jpg,.jpeg,.png,.gif,.webp"
-              className="hidden"
-              disabled={disabled}
-              onChange={(e) => handleFileSelect(k, e)}
-            />
-          </label>
-
           {file && (
             <Button
               type="button"
@@ -382,6 +396,16 @@ export default function NewSurveyPage() {
             Back to Surveys
           </Button>
         </Link>
+
+        {draftBannerOpen ? (
+          <div className="mb-4">
+            <DraftBanner
+              savedAt={draftBannerSavedAt}
+              onRestore={handleRestoreDraft}
+              onDiscard={handleDiscardDraft}
+            />
+          </div>
+        ) : null}
 
         <div className="rounded-2xl bg-white shadow-xl border border-border p-4 sm:p-6">
           <Form {...form}>
@@ -436,9 +460,7 @@ export default function NewSurveyPage() {
                             field.onBlur()
                             const v = form.getValues("serviceNo")?.trim()
                             if (!v) return
-                            const list = await surveysData.listSurveys()
-                            const norm = v.toLowerCase()
-                            const duplicate = list.some((s) => (s.serviceNo ?? "").trim().toLowerCase() === norm)
+                            const duplicate = await surveysData.isSurveyServiceNoTaken(v)
                             if (duplicate) {
                               form.setError("serviceNo", { message: "Service number is already used by another survey." })
                               form.setFocus("aadharNo")
@@ -470,8 +492,7 @@ export default function NewSurveyPage() {
                             field.onBlur()
                             const v = form.getValues("aadharNo")?.trim()
                             if (!v || v.length < 12) return
-                            const list = await surveysData.listSurveys()
-                            const duplicate = list.some((s) => (s.aadharNo ?? "").trim() === v)
+                            const duplicate = await surveysData.isSurveyAadharTaken(v)
                             if (duplicate) {
                               form.setError("aadharNo", { message: "Aadhar number already exists in another survey." })
                             }
@@ -535,6 +556,8 @@ export default function NewSurveyPage() {
             <CardHeader>
               <CardTitle className="text-lg text-foreground">Site Location</CardTitle>
               <p className="text-sm text-muted-foreground">Optional: select a project to fill district, pin code, state, city and address.</p>
+              {projectsLoading ? <p className="text-xs text-muted-foreground">Loading project options...</p> : null}
+              {projectsError ? <p className="text-xs text-destructive">Project options failed to load.</p> : null}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2">
@@ -1328,7 +1351,7 @@ export default function NewSurveyPage() {
                   name="bankDetails.accountNo"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Account No</FormLabel>
+                      <FormLabel>Account No (optional)</FormLabel>
                       <FormControl>
                         <Input className="border-solar" inputMode="numeric" {...field} value={field.value ?? ""} />
                       </FormControl>
@@ -1341,7 +1364,7 @@ export default function NewSurveyPage() {
                   name="bankDetails.ifsc"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>IFSC</FormLabel>
+                      <FormLabel>IFSC (optional)</FormLabel>
                       <FormControl>
                         <Input className="border-solar" placeholder="e.g. SBIN0001234" {...field} value={field.value ?? ""} />
                       </FormControl>
@@ -1350,33 +1373,6 @@ export default function NewSurveyPage() {
                   )}
                 />
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Remarks (Optional) */}
-          <Card className="border-solar bg-solar-card shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg text-foreground">Remarks</CardTitle>
-              <p className="text-sm text-muted-foreground">Any additional notes or observations (optional)</p>
-            </CardHeader>
-            <CardContent>
-              <FormField
-                control={form.control}
-                name="remarks"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Textarea
-                        className="border-solar min-h-[100px]"
-                        placeholder="Enter any remarks or observations..."
-                        {...field}
-                        value={field.value ?? ""}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </CardContent>
           </Card>
 

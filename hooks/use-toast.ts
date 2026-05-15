@@ -6,7 +6,25 @@ import * as React from 'react'
 import type { ToastActionElement, ToastProps } from '@/components/ui/toast'
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_REMOVE_DELAY = 500
+
+/** Visible duration before auto-dismiss (Radix + imperative dismiss stay aligned). */
+export const TOAST_DURATION_MS = 2000
+
+const autoDismissTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+
+function clearAutoDismiss(toastId: string) {
+  const t = autoDismissTimeouts.get(toastId)
+  if (t) {
+    clearTimeout(t)
+    autoDismissTimeouts.delete(toastId)
+  }
+}
+
+function clearAllAutoDismiss() {
+  autoDismissTimeouts.forEach((t) => clearTimeout(t))
+  autoDismissTimeouts.clear()
+}
 
 type ToasterToast = ToastProps & {
   id: string
@@ -147,7 +165,14 @@ function toast({ ...props }: Toast) {
       type: 'UPDATE_TOAST',
       toast: { ...props, id },
     })
-  const dismiss = () => dispatch({ type: 'DISMISS_TOAST', toastId: id })
+
+  const dismiss = () => {
+    clearAutoDismiss(id)
+    dispatch({ type: 'DISMISS_TOAST', toastId: id })
+  }
+
+  // Only one toast at a time — cancel any pending auto-dismiss from the previous toast
+  clearAllAutoDismiss()
 
   dispatch({
     type: 'ADD_TOAST',
@@ -160,6 +185,12 @@ function toast({ ...props }: Toast) {
       },
     },
   })
+
+  const autoDismissTimer = setTimeout(() => {
+    autoDismissTimeouts.delete(id)
+    dismiss()
+  }, TOAST_DURATION_MS)
+  autoDismissTimeouts.set(id, autoDismissTimer)
 
   return {
     id: id,
@@ -179,7 +210,7 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+  }, [])
 
   return {
     ...state,

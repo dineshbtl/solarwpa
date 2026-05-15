@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 import type { Database } from '@/lib/supabase/database.types'
 
 /** Server-only: read SUPABASE_SERVICE_ROLE_KEY from .env.local if not in process.env (e.g. some Server Action contexts). */
@@ -22,48 +23,60 @@ function getServiceRoleKeyFromEnvFile(): string | undefined {
   }
 }
 
+/** Port when `NEXT_PUBLIC_SUPABASE_URL` is `http://localhost` without `:port` (dev LAN rewrite). Default 8000 (Supabase); use 7100 etc. if Kong is on the 7000 range. */
+function defaultLocalSupabaseApiPort(): string {
+  const p = process.env.NEXT_PUBLIC_SUPABASE_LOCAL_API_PORT
+  if (p && /^\d+$/.test(p)) return p
+  return '8000'
+}
+
 /**
  * Browser-safe Supabase client for self-hosted or cloud Supabase.
- * Uses NEXT_PUBLIC_ env vars so it works in the browser.
+ * Uses a single canonical `NEXT_PUBLIC_SUPABASE_URL` (HTTPS domain recommended).
  *
- * Dual URL (LAN + public):
- * - When NEXT_PUBLIC_SUPABASE_URL_LAN is set, we use it when the app is opened
- *   via the same host as in that URL (e.g. 172.30.0.191) or via localhost (so
- *   same-machine access works). Otherwise we use NEXT_PUBLIC_SUPABASE_URL.
- * - So: open at http://172.30.0.191:3000 or http://localhost:3000 → URL_LAN;
- *   open at http://183.82.117.36:3000 → NEXT_PUBLIC_SUPABASE_URL.
- *
- * Fallback when only NEXT_PUBLIC_SUPABASE_URL is localhost: if the page is
- * opened via a different host (e.g. LAN IP), we use that host with the same port.
+ * Dev-only: if `NEXT_PUBLIC_SUPABASE_URL` points at localhost but the app is opened
+ * via another hostname (e.g. LAN IP), rewrite the API host to match so the browser
+ * can reach Kong without mixed origins.
  */
 function getEnv() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   let url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && url) {
     const hostname = window.location.hostname
-    if (process.env.NEXT_PUBLIC_SUPABASE_URL_LAN) {
-      try {
-        const lanUrl = process.env.NEXT_PUBLIC_SUPABASE_URL_LAN
-        const lanHost = new URL(lanUrl).hostname
-        if (hostname === lanHost || hostname === 'localhost' || hostname === '127.0.0.1') {
-          url = lanUrl
-        }
-      } catch {
-        // keep url as NEXT_PUBLIC_SUPABASE_URL
-      }
-    } else if (url && (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1'))) {
+    if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
       if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        const fallbackPort = defaultLocalSupabaseApiPort()
         try {
           const parsed = new URL(url)
-          const port = parsed.port || '8000'
+          const port = parsed.port || fallbackPort
           url = `http://${hostname}:${port}`
         } catch {
-          url = `http://${hostname}:8000`
+          url = `http://${hostname}:${fallbackPort}`
         }
       }
     }
   }
   return { url, key }
+}
+
+const SUPABASE_REQUEST_TIMEOUT_MS = 15_000
+
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
+  const ctrl = new AbortController()
+  const timeout = setTimeout(() => ctrl.abort(), SUPABASE_REQUEST_TIMEOUT_MS)
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: init?.signal ?? ctrl.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('Server is taking too long to respond. Please refresh and try again.')
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 export function createSupabaseBrowserClient() {
@@ -73,21 +86,25 @@ export function createSupabaseBrowserClient() {
       'Missing Supabase env: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set. See .env.example and docs/SUPABASE_SELFHOSTED.md.'
     )
   }
-  return createClient<Database>(url, key, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
+  return createBrowserClient<Database>(url, key, {
+    global: {
+      fetch: fetchWithTimeout,
+    },
+    cookieOptions: {
+      path: '/',
+      sameSite: 'lax',
+      secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
     },
   })
 }
 
-// Singleton for client components (same as createSupabaseBrowserClient() but cached per request in Next)
-let browserClient: ReturnType<typeof createClient<Database>> | null = null
+let browserClient: ReturnType<typeof createBrowserClient<Database>> | null = null
 
 export function getSupabaseBrowserClient() {
   if (typeof window === 'undefined') {
-    return createSupabaseBrowserClient()
+    throw new Error(
+      'getSupabaseBrowserClient() must run in the browser only. On the server use createSupabaseServerClient().'
+    )
   }
   if (!browserClient) {
     browserClient = createSupabaseBrowserClient()
@@ -97,6 +114,7 @@ export function getSupabaseBrowserClient() {
 
 /** Returns client only when env is set; use for optional Supabase flows (e.g. data layer, auth fallback). */
 export function getSupabaseBrowserClientIfConfigured(): ReturnType<typeof createClient<Database>> | null {
+  if (typeof window === 'undefined') return null
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) return null
@@ -107,14 +125,16 @@ export function getSupabaseBrowserClientIfConfigured(): ReturnType<typeof create
 let adminClient: ReturnType<typeof createClient<Database>> | null = null
 
 export function getSupabaseAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   // Check process.env first, then .env.local (for Server Actions where env may not be passed)
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY ||
     getServiceRoleKeyFromEnvFile()
   if (!url) {
-    throw new Error('Admin client requires NEXT_PUBLIC_SUPABASE_URL in .env.local (required for server-side Supabase)')
+    throw new Error(
+      'Admin client requires NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL in .env.local (required for server-side Supabase)'
+    )
   }
   if (!serviceKey) {
     throw new Error(

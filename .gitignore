@@ -44,3 +44,13 @@ pasted-text*.txt
 
 # Supabase upstream repo at project root (cloned, not part of this frontend)
 /supabase/
+
+# Local database backups (large; may contain sensitive data)
+/backups/
+
+# Scratch uploads
+tmp_*.jpg
+
+# Consumer list CSVs (PII — keep local only)
+list_latest.csv
+scripts/data/*.csv

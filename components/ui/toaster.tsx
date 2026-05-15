@@ -1,6 +1,6 @@
 'use client'
 
-import { useToast } from '@/hooks/use-toast'
+import { TOAST_DURATION_MS, useToast } from '@/hooks/use-toast'
 import {
   Toast,
   ToastClose,
@@ -14,7 +14,7 @@ export function Toaster() {
   const { toasts } = useToast()
 
   return (
-    <ToastProvider>
+    <ToastProvider duration={TOAST_DURATION_MS}>
       {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>

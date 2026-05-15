@@ -15,6 +15,7 @@ import https from 'https'
 import http from 'http'
 
 const DEFAULT_CSV = 'list.csv'
+const DEFAULT_PROJECT_ID = process.env.ACTIVE_PROJECT_ID || 'PROJ-001'
 
 // Load .env.local
 const envPath = resolve(process.cwd(), '.env.local')
@@ -211,6 +212,7 @@ async function main() {
 
     const record = {
       id,
+      project_id: DEFAULT_PROJECT_ID,
       beneficiary_name: beneficiaryName,
       service_no: serviceNo,
       aadhar_no: aadharNo.replace(/\D/g, '').slice(0, 12) || '000000000000',

@@ -56,7 +56,8 @@ const InspectionActivityEventSchema = z.object({
   meta: z.record(z.unknown()).optional(),
 })
 
-const InspectionSchema: z.ZodType<Inspection> = z.object({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const InspectionSchema = z.object({
   id: z.string().min(1),
   installationId: z.string().min(1),
   projectId: z.string().optional(),
@@ -235,6 +236,16 @@ export function setManagerApproval(id: string, approved: boolean, remarks: strin
       approvedAt: now,
       approvedBy,
     },
+    activity: [
+      ...(prev.activity ?? []),
+      {
+        at: now,
+        actorId: approvedBy,
+        action: approved ? "approved" : "rejected",
+        message: approved ? "Manager approved inspection" : "Manager reopened inspection",
+        meta: { remarks, by: "manager", status },
+      },
+    ],
   }
   const next = [...inspections]
   next[idx] = nextItem

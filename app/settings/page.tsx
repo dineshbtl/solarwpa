@@ -1,12 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Loader2, Settings, Palette, Bell, Shield, Database, Globe, Clock, Info } from "lucide-react"
+import { Loader2, Settings, Bell, Shield, Database, Globe, Clock, Info, Sun, ChevronRight } from "lucide-react"
 import { getCurrentProfileFromSupabase } from "@/lib/supabase/users"
-import { useTheme } from "next-themes"
 import type { User } from "@/lib/store/users"
 
 // Application settings configuration
@@ -14,7 +13,6 @@ const appSettings = {
   version: "1.0.0",
   environment: process.env.NODE_ENV || "development",
   features: {
-    darkMode: false,
     notifications: true,
     analytics: true,
   },
@@ -29,8 +27,6 @@ const appSettings = {
 export default function SettingsPage() {
   const [profile, setProfile] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const { theme, setTheme } = useTheme()
-  const [darkModeEnabled, setDarkModeEnabled] = useState(false)
 
   useEffect(() => {
     async function loadProfile() {
@@ -46,15 +42,6 @@ export default function SettingsPage() {
     loadProfile()
   }, [])
 
-  useEffect(() => {
-    setDarkModeEnabled(theme === "dark")
-  }, [theme])
-
-  const handleDarkModeToggle = (enabled: boolean) => {
-    setDarkModeEnabled(enabled)
-    setTheme(enabled ? "dark" : "light")
-  }
-
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
@@ -66,6 +53,30 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-6">
+          {/* Administration — Strapi-style entry to Roles */}
+          <Card className="border-border bg-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Administration
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Link
+                href="/settings/roles"
+                className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/20 p-4 transition-colors hover:bg-muted/40"
+              >
+                <div>
+                  <p className="font-medium text-foreground">Users & permissions · Roles</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Configure permissions for Admin, Manager, Engineer, Surveyor, and Government — like Strapi&apos;s role editor.
+                  </p>
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+              </Link>
+            </CardContent>
+          </Card>
+
           {/* User Settings Card */}
           <Card className="border-border bg-card shadow-sm">
             <CardHeader>
@@ -158,13 +169,17 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
                   <div className="flex items-center gap-3">
-                    <Palette className="h-5 w-5 text-muted-foreground" />
+                    <Sun className="h-5 w-5 text-muted-foreground" />
                     <div>
-                      <p className="text-foreground font-medium">Dark Mode</p>
-                      <p className="text-sm text-muted-foreground">Use dark theme across the application</p>
+                      <p className="text-foreground font-medium">Appearance</p>
+                      <p className="text-sm text-muted-foreground">
+                        Light mode only. System and browser dark preferences are ignored.
+                      </p>
                     </div>
                   </div>
-                  <Switch checked={darkModeEnabled} onCheckedChange={handleDarkModeToggle} />
+                  <Badge variant="outline" className="bg-green-100 text-green-800">
+                    Light
+                  </Badge>
                 </div>
 
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
@@ -232,10 +247,13 @@ export default function SettingsPage() {
               <div className="flex items-start gap-3">
                 <Info className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div>
-                  <p className="font-medium text-foreground">Read-only Settings</p>
+                  <p className="font-medium text-foreground">Reference settings</p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    This page displays application configuration for reference. Settings cannot be modified directly.
-                    Contact your administrator for any configuration changes.
+                    Overview items below are for reference. To change what each role can do, open{" "}
+                    <Link href="/settings/roles" className="font-medium text-green-700 underline underline-offset-2">
+                      Settings → Roles
+                    </Link>
+                    .
                   </p>
                 </div>
               </div>

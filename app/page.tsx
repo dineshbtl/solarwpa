@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
@@ -10,21 +10,56 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
+import { Spinner } from "@/components/ui/spinner"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { toast } from "@/hooks/use-toast"
+import { describeAuthSignInError, normalizeLoginEmail } from "@/lib/auth-login"
+import { requestDeviceLocationPermission } from "@/lib/geolocation"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Database, UserStatus } from "@/lib/supabase/database.types"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
-function useSupabaseAuth() {
-  if (typeof window === "undefined") return null
-  try {
+function useDeferredSupabaseClient(): {
+  client: SupabaseClient<Database> | null
+  /** False only for one tick when Supabase is configured — avoids treating real login as demo before client exists. */
+  authReady: boolean
+} {
+  const [client, setClient] = useState<SupabaseClient<Database> | null>(null)
+  const [authReady, setAuthReady] = useState(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (url && key) {
-      const { getSupabaseBrowserClient } = require("@/lib/supabase/client")
-      return getSupabaseBrowserClient()
+    return !(url && key)
+  })
+  useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !key) {
+      setAuthReady(true)
+      return
     }
-  } catch {
-    // env not set or client not available
-  }
-  return null
+    try {
+      setClient(getSupabaseBrowserClient())
+    } catch (e) {
+      console.warn("[login] Supabase browser client failed to initialize", e)
+    } finally {
+      setAuthReady(true)
+    }
+  }, [])
+  return { client, authReady }
+}
+
+/** Read post-login redirect without `useSearchParams` (avoids Next.js static/streaming + Suspense edge cases on `/`). */
+function getLoginRedirectPath(): string | null {
+  if (typeof window === "undefined") return null
+  const raw = new URLSearchParams(window.location.search).get("redirectTo")
+  return raw && raw.startsWith("/") ? raw : null
 }
 
 /** Same on server and client – use for UI that must not hydration-mismatch. */
@@ -36,92 +71,119 @@ function isSupabaseConfigured() {
 }
 
 export default function LoginPage() {
+  return <LoginPageContent />
+}
+
+function LoginPageContent() {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const supabase = useSupabaseAuth()
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false)
+  const { client: supabase, authReady } = useDeferredSupabaseClient()
   const supabaseConfigured = isSupabaseConfigured()
+
+  const continueAfterLocationPrompt = () => {
+    router.push(getLoginRedirectPath() ?? "/dashboard")
+    router.refresh()
+  }
+
+  const handleLocationDecision = async (allow: boolean) => {
+    setLoading(true)
+    setShowLocationPrompt(false)
+    if (allow) {
+      const locationGranted = await requestDeviceLocationPermission()
+      if (!locationGranted) {
+        toast({
+          title: "Location was blocked",
+          description: "Please allow location access to capture photo GPS coordinates while uploading photos.",
+        })
+      }
+    }
+    continueAfterLocationPrompt()
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (supabaseConfigured && !authReady) return
     setLoading(true)
-    try {
-      if (supabase) {
-        let data: { user: unknown } | null = null
-        let error: { message: string } | null = null
-        try {
-          const result = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-          data = result.data
-          error = result.error
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          const isNetwork = /failed to fetch|network|connection|refused|timeout/i.test(msg)
-          toast({
-            title: "Login failed",
-            description: isNetwork
-              ? "Cannot reach the auth server. Open the app using the same address as Supabase (e.g. http://172.30.0.191:3000 for LAN or http://183.82.117.36:3000 for internet) and ensure Supabase is running."
-              : msg || "Please try again.",
-            variant: "destructive",
-          })
-          setLoading(false)
-          return
-        }
-        if (error) {
-          toast({
-            title: "Login failed",
-            description: error.message,
-            variant: "destructive",
-          })
-          setLoading(false)
-          return
-        }
-
-        // Check profile status — block inactive users
-        try {
-          const authUser = (data as { user?: { id?: string } })?.user
-          if (authUser?.id) {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("status")
-              .eq("auth_user_id", authUser.id)
-              .maybeSingle()
-            if (profile?.status === "inactive") {
-              await supabase.auth.signOut()
-              toast({
-                title: "Account deactivated",
-                description: "Your account has been deactivated. Please contact your administrator.",
-                variant: "destructive",
-              })
-              setLoading(false)
-              return
-            }
-          }
-        } catch {
-          // If profile check fails, allow login (profile might not exist yet)
-        }
-
-        toast({ title: "Welcome back!", description: "Signed in successfully." })
-        router.push("/dashboard")
-        router.refresh()
-        return
-      }
-      // Demo fallback when Supabase not configured
-      if (password.trim().length < 4) {
+    if (supabase) {
+      let signInData: { user: unknown } | null = null
+      let error: { message: string } | null = null
+      try {
+        const normalizedEmail = normalizeLoginEmail(email)
+        const result = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        })
+        signInData = result.data
+        error = result.error
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        const isNetwork = /failed to fetch|network|connection|refused|timeout/i.test(msg)
         toast({
           title: "Login failed",
-          description: "Please check your credentials and try again.",
+          description: isNetwork
+            ? "Cannot reach the auth server. Open the app using the same address as Supabase (e.g. http://172.30.0.191:3000 for LAN or http://183.82.117.36:3000 for internet) and ensure Supabase is running."
+            : msg || "Please try again.",
           variant: "destructive",
         })
         setLoading(false)
         return
       }
-      toast({ title: "Login successful", description: "Welcome back! (demo)" })
-      router.push("/dashboard")
-    } finally {
-      setLoading(false)
+      if (error) {
+        toast({
+          title: "Login failed",
+          description: describeAuthSignInError(error as { message: string; code?: string }),
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+
+      // Check profile status — block inactive users
+      try {
+        const authUser = (signInData as { user?: { id?: string } })?.user
+        if (authUser?.id) {
+          const profileRes = await supabase
+            .from("profiles")
+            .select("status")
+            .eq("auth_user_id", authUser.id)
+            .maybeSingle()
+          const profile = profileRes.data as { status: UserStatus } | null
+          if (profile?.status === "inactive") {
+            await supabase.auth.signOut()
+            toast({
+              title: "Account deactivated",
+              description: "Your account has been deactivated. Please contact your administrator.",
+              variant: "destructive",
+            })
+            setLoading(false)
+            return
+          }
+        }
+      } catch {
+        // If profile check fails, allow login (profile might not exist yet)
+      }
+
+      toast({ title: "Welcome back!", description: "Signed in successfully." })
+      setShowLocationPrompt(true)
+      return
     }
+    // Demo fallback when Supabase not configured
+    if (password.trim().length < 4) {
+      toast({
+        title: "Login failed",
+        description: "Please check your credentials and try again.",
+        variant: "destructive",
+      })
+      setLoading(false)
+      return
+    }
+    toast({ title: "Login successful", description: "Welcome back! (demo)" })
+    router.push(getLoginRedirectPath() ?? "/dashboard")
+    setLoading(false)
   }
 
   return (
@@ -131,7 +193,7 @@ export default function LoginPage() {
         {/* Animated Sun */}
         <div className="absolute top-20 right-20 w-36 h-36 animate-pulse">
           <div className="relative w-full h-full">
-            <div className="absolute inset-0 bg-gradient-to-br from-amber-400 via-orange-400 to-amber-500 rounded-full animate-spin-slow" />
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-400 via-orange-400 to-amber-500 rounded-full login-animate-spin-slow" />
             <div className="absolute inset-2 bg-gradient-to-br from-amber-300 to-orange-400 rounded-full" />
             <div className="absolute inset-4 bg-gradient-to-br from-white/30 to-transparent rounded-full" />
             {/* Sun Rays */}
@@ -153,7 +215,7 @@ export default function LoginPage() {
         </div>
 
         {/* Solar Panels - Professional muted blue-gray */}
-        <div className="absolute bottom-32 left-20 space-y-4 animate-float">
+        <div className="absolute bottom-32 left-20 space-y-4 login-animate-float">
           <div className="flex gap-3">
             {[...Array(3)].map((_, i) => (
               <div
@@ -181,7 +243,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="absolute top-40 left-1/4 space-y-4 animate-float" style={{ animationDelay: "1s" }}>
+        <div className="absolute top-40 left-1/4 space-y-4 login-animate-float" style={{ animationDelay: "1s" }}>
           <div className="flex gap-3">
             {[...Array(2)].map((_, i) => (
               <div
@@ -203,7 +265,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="absolute bottom-40 right-32 space-y-4 animate-float" style={{ animationDelay: "0.5s" }}>
+        <div className="absolute bottom-40 right-32 space-y-4 login-animate-float" style={{ animationDelay: "0.5s" }}>
           <div className="flex gap-3">
             {[...Array(4)].map((_, i) => (
               <div
@@ -226,7 +288,7 @@ export default function LoginPage() {
         </div>
 
         {/* Additional smaller panel for depth */}
-        <div className="absolute top-60 right-48 animate-float" style={{ animationDelay: "1.5s" }}>
+        <div className="absolute top-60 right-48 login-animate-float" style={{ animationDelay: "1.5s" }}>
           <div className="w-10 h-12 bg-gradient-to-br from-slate-600 via-slate-700 to-slate-800 rounded-lg shadow-md border border-slate-500/40 relative overflow-hidden">
             <div className="absolute inset-1 grid grid-cols-2 gap-[1px]">
               {[...Array(4)].map((_, j) => (
@@ -266,6 +328,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              disabled={loading}
               className="w-full px-4 py-3 rounded-xl border-gray-300 focus:border-green-600 focus:ring-green-600"
             />
           </div>
@@ -282,6 +345,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
                 className="w-full px-4 py-3 pr-12 rounded-xl border-gray-300 focus:border-green-600 focus:ring-green-600"
               />
               <Button
@@ -299,10 +363,15 @@ export default function LoginPage() {
 
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || (supabaseConfigured && !authReady)}
             className="w-full bg-gradient-dark-green hover:opacity-90 text-white py-6 rounded-xl font-semibold text-base shadow-lg transition-all"
           >
-            {loading ? "Signing in…" : "Sign In"}
+            {loading && <Spinner className="mr-2" />}
+            {supabaseConfigured && !authReady
+              ? "Preparing sign-in…"
+              : loading
+                ? "Signing in…"
+                : "Sign In"}
           </Button>
 
           <div className="text-center text-sm text-muted-foreground space-y-1">
@@ -317,31 +386,29 @@ export default function LoginPage() {
         </form>
       </Card>
 
-      <style jsx global>{`
-        @keyframes float {
-          0%,
-          100% {
-            transform: translateY(0px);
-          }
-          50% {
-            transform: translateY(-20px);
-          }
-        }
-        @keyframes spin-slow {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-        .animate-float {
-          animation: float 6s ease-in-out infinite;
-        }
-        .animate-spin-slow {
-          animation: spin-slow 20s linear infinite;
-        }
-      `}</style>
+      <Dialog open={showLocationPrompt} onOpenChange={setShowLocationPrompt}>
+        <DialogContent
+          showCloseButton={false}
+          className="max-w-sm rounded-2xl px-5 py-4"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="gap-1 text-left">
+            <DialogTitle className="text-base leading-5">Allow location access?</DialogTitle>
+            <DialogDescription className="text-sm">
+              This helps auto-capture GPS coordinates for installation photos.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row justify-end gap-2 sm:justify-end">
+            <Button type="button" variant="secondary" onClick={() => handleLocationDecision(false)}>
+              Don&apos;t Allow
+            </Button>
+            <Button type="button" onClick={() => handleLocationDecision(true)}>
+              Allow
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

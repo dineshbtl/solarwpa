@@ -4,10 +4,12 @@ import type React from "react"
 
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ArrowLeft, Camera, MapPin, Upload, Save, FileImage, Loader2 } from "lucide-react"
+import { ArrowLeft, Camera, MapPin, Save, FileImage, Loader2 } from "lucide-react"
+import { useFormDraft } from "@/lib/store/use-form-draft"
+import { DraftBanner } from "@/components/draft-banner"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,16 +20,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { toast } from "@/hooks/use-toast"
 import { CreateSurveySchema, type CreateSurveyInput, type FileMeta, type Survey, type SurveyUploadKeys } from "@/lib/store/surveys"
 import * as surveysData from "@/lib/data/surveys"
-import { updateSurveyWithFormDataAction } from "@/app/actions/surveys"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
-import { getUserById, listUsers, seedUsers } from "@/lib/store/users"
-import { useSurvey, useProjects } from "@/lib/data/hooks"
+import { useSurvey, useProjects, useUsers } from "@/lib/data/hooks"
 import { useRole } from "@/contexts/role-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { siteLocationOptions } from "@/lib/data/site-location-options"
 import { LocationAutocomplete } from "@/components/location-autocomplete"
 import { getCurrentLocation as getGeoLocation } from "@/lib/geolocation"
-import { compressImage } from "@/lib/image-compress"
+import { preparePhotoWithGpsStamp } from "@/lib/photo-gps-stamp"
+import { stampOptionsFromSurveySiteDetails } from "@/lib/survey-photo-stamp"
 
 type UploadState = Partial<Record<SurveyUploadKeys, File>>
 
@@ -108,13 +108,14 @@ export default function EditSurveyPage() {
   const [isCapturingLocation, setIsCapturingLocation] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { currentUser } = useRole()
-  const { data: projects = [] } = useProjects()
+  const { data: projects = [], loading: projectsLoading, error: projectsError } = useProjects()
+  const { data: users = [] } = useUsers()
+  const getUserById = useCallback(
+    (uid: string | undefined) => (uid ? users.find((u) => u.id === uid) : undefined),
+    [users]
+  )
 
   const locationCaptured = Boolean(siteDetails.gpsLat && siteDetails.gpsLng)
-
-  useEffect(() => {
-    seedUsers()
-  }, [])
 
   const form = useForm<CreateSurveyInput>({
     resolver: zodResolver(CreateSurveySchema),
@@ -160,8 +161,48 @@ export default function EditSurveyPage() {
     mode: "onTouched",
   })
 
+  // Draft persistence — keyed per-survey-id so each row has its own pending changes.
+  // Writes stay disabled until after the server data has hydrated AND the user has either
+  // restored the existing draft or discarded it; otherwise the pristine server values would
+  // immediately overwrite a useful draft on mount.
+  const watchedValues = form.watch()
+  const draftPayload = useMemo(
+    () => ({ values: watchedValues, siteDetails }),
+    [watchedValues, siteDetails],
+  )
+  const [draftEnabled, setDraftEnabled] = useState(false)
+  const surveyDraft = useFormDraft<{ values: CreateSurveyInput; siteDetails: typeof siteDetails }>(
+    id ? `surveys.edit.${id}` : "surveys.edit.__unknown__",
+    draftPayload,
+    { enabled: draftEnabled && !!id },
+  )
+  const [draftBannerOpen, setDraftBannerOpen] = useState(false)
+  const [draftBannerSavedAt, setDraftBannerSavedAt] = useState<string | null>(null)
+  // Tracks the survey id we have already hydrated the form from. Without this guard the
+  // hydration effect re-fires on every render (because the draft hook returns a new object
+  // reference whenever its internal savedAt state updates), which would call form.reset() in
+  // a loop and crash the page with "Maximum update depth exceeded".
+  const hydratedForIdRef = useRef<string | null>(null)
+
+  const handleRestoreDraft = () => {
+    const d = surveyDraft.restore()
+    if (d?.values) form.reset(d.values)
+    if (d?.siteDetails) setSiteDetails(d.siteDetails)
+    setDraftBannerOpen(false)
+    setDraftEnabled(true)
+    toast({ title: "Draft restored", description: "Re-attach any photos before saving." })
+  }
+
+  const handleDiscardDraft = () => {
+    surveyDraft.clear()
+    setDraftBannerOpen(false)
+    setDraftEnabled(true)
+  }
+
   useEffect(() => {
     if (!survey) return
+    if (hydratedForIdRef.current === survey.id) return
+    hydratedForIdRef.current = survey.id
     setSiteDetails({ ...(survey.siteDetails ?? {}) })
     setExistingUploads(survey.uploads ?? {})
     const sl = survey.siteLocation
@@ -203,8 +244,16 @@ export default function EditSurveyPage() {
         ifsc: survey.bankDetails?.ifsc ?? "",
         branch: survey.bankDetails?.branch ?? "",
       },
-      remarks: survey.remarks ?? "",
     })
+    if (surveyDraft.hasDraft()) {
+      setDraftBannerSavedAt(surveyDraft.peekSavedAt())
+      setDraftBannerOpen(true)
+    } else {
+      setDraftEnabled(true)
+    }
+    // surveyDraft is intentionally omitted — its identity changes on every debounced write
+    // and we only want to hydrate once per survey id (guarded above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [survey, form])
 
   const uploadLabels: Record<SurveyUploadKeys, string> = useMemo(
@@ -294,8 +343,16 @@ export default function EditSurveyPage() {
       return
     }
     if (f) {
-      const compressed = await compressImage(f)
-      setUpload(k, compressed)
+      try {
+        const prepared = await preparePhotoWithGpsStamp(f, stampOptionsFromSurveySiteDetails(siteDetails))
+        setUpload(k, prepared.file)
+      } catch {
+        toast({
+          title: "Could not process image",
+          description: "Try another photo or a smaller file. If this keeps happening, capture site location first.",
+          variant: "destructive",
+        })
+      }
     } else {
       setUpload(k, undefined)
     }
@@ -336,40 +393,22 @@ export default function EditSurveyPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {/* Camera: uses native <label> trigger – reliable on mobile */}
+          {/* Camera/Gallery: allows both camera capture and selecting existing images */}
           <label
             htmlFor={disabled ? undefined : `edit_camera_${k}`}
             className={`inline-flex items-center justify-center gap-2 rounded-md border border-solar bg-background px-4 py-2 text-sm font-medium cursor-pointer hover:bg-accent hover:text-accent-foreground ${disabled ? "opacity-50 pointer-events-none" : ""}`}
           >
             <Camera className="h-4 w-4" />
-            Take Photo
+            Camera / Gallery
             <input
               id={`edit_camera_${k}`}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               disabled={disabled}
               onChange={(e) => handleFileSelect(k, e)}
             />
           </label>
-          {/* Library: uses native <label> trigger – reliable on mobile */}
-          <label
-            htmlFor={disabled ? undefined : `edit_library_${k}`}
-            className={`inline-flex items-center justify-center gap-2 rounded-md border border-solar bg-background px-4 py-2 text-sm font-medium cursor-pointer hover:bg-accent hover:text-accent-foreground ${disabled ? "opacity-50 pointer-events-none" : ""}`}
-          >
-            <Upload className="h-4 w-4" />
-            {file || stored ? "Replace" : "Choose from Library"}
-            <input
-              id={`edit_library_${k}`}
-              type="file"
-              accept="image/*,.jpg,.jpeg,.png,.gif,.webp"
-              className="hidden"
-              disabled={disabled}
-              onChange={(e) => handleFileSelect(k, e)}
-            />
-          </label>
-
           {(file || stored) && (
             <Button
               type="button"
@@ -395,8 +434,8 @@ export default function EditSurveyPage() {
         if (f) mergedMeta[k] = toMeta(f)
       })
 
-      // Enforce GPRS Cam flow
-      if (mergedMeta.beneficiaryPhoto && !locationCaptured) {
+      // Enforce GPRS Cam flow for a newly selected beneficiary photo only (not legacy rows in mergedMeta).
+      if (uploads.beneficiaryPhoto && !locationCaptured) {
         toast({
           title: "Capture location first",
           description: "Please capture site location before uploading beneficiary photo.",
@@ -405,25 +444,8 @@ export default function EditSurveyPage() {
         return
       }
 
-      // When there are new file uploads, use server action (service role) so storage RLS does not block.
-      // When there are no new files, use client-side update. Ensure SUPABASE_SERVICE_ROLE_KEY and
-      // SUPABASE_URL (if app runs in Docker) are set in .env.local for the server path.
-      const hasNewFiles = Object.keys(uploads).some((k) => uploads[k as SurveyUploadKeys])
-      if (isSupabaseConfigured() && hasNewFiles) {
-        const formData = new FormData()
-        formData.set("id", id)
-        formData.set("input", JSON.stringify(values))
-        formData.set("siteDetails", JSON.stringify(siteDetails))
-        formData.set("submittedById", currentUser?.id ?? "")
-        formData.set("meta", JSON.stringify(mergedMeta))
-        for (const k of Object.keys(uploads) as SurveyUploadKeys[]) {
-          const f = uploads[k]
-          if (f) formData.append(`file_${k}`, f)
-        }
-        await updateSurveyWithFormDataAction(formData)
-      } else {
-        await surveysData.updateSurvey(id, values, mergedMeta, siteDetails, currentUser?.id ?? undefined, uploads)
-      }
+      await surveysData.updateSurvey(id, values, mergedMeta, siteDetails, currentUser?.id ?? undefined, uploads)
+      surveyDraft.clear()
       toast({ title: "Survey updated" })
       router.push(`/surveys/${id}`)
     } catch (e) {
@@ -470,6 +492,16 @@ export default function EditSurveyPage() {
             Back to Survey
           </Button>
         </Link>
+
+        {draftBannerOpen ? (
+          <div className="mb-4">
+            <DraftBanner
+              savedAt={draftBannerSavedAt}
+              onRestore={handleRestoreDraft}
+              onDiscard={handleDiscardDraft}
+            />
+          </div>
+        ) : null}
 
         <div className="rounded-2xl bg-white shadow-xl border border-border p-4 sm:p-6">
         {/* Header — same as detail page */}
@@ -542,11 +574,7 @@ export default function EditSurveyPage() {
                                 field.onBlur()
                                 const v = form.getValues("serviceNo")?.trim()
                                 if (!v) return
-                                const list = await surveysData.listSurveys()
-                                const norm = v.toLowerCase()
-                                const duplicate = list.some(
-                                  (s) => s.id !== id && (s.serviceNo ?? "").trim().toLowerCase() === norm
-                                )
+                                const duplicate = await surveysData.isSurveyServiceNoTaken(v, id)
                                 if (duplicate) {
                                   form.setError("serviceNo", {
                                     message: "Service number is already used by another survey.",
@@ -629,6 +657,8 @@ export default function EditSurveyPage() {
                 <CardHeader>
                   <CardTitle className="text-lg text-foreground">Site Location</CardTitle>
                   <p className="text-sm text-muted-foreground">Optional: select a project to fill district, pin code, state, city and address.</p>
+                  {projectsLoading ? <p className="text-xs text-muted-foreground">Loading project options...</p> : null}
+                  {projectsError ? <p className="text-xs text-destructive">Project options failed to load.</p> : null}
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-2">
@@ -1411,7 +1441,7 @@ export default function EditSurveyPage() {
                       name="bankDetails.accountNo"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Account No</FormLabel>
+                          <FormLabel>Account No (optional)</FormLabel>
                           <FormControl>
                             <Input className="border-solar" inputMode="numeric" {...field} value={field.value ?? ""} />
                           </FormControl>
@@ -1424,42 +1454,15 @@ export default function EditSurveyPage() {
                       name="bankDetails.ifsc"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>IFSC</FormLabel>
+                          <FormLabel>IFSC (optional)</FormLabel>
                           <FormControl>
-                            <Input className="border-solar" placeholder="e.g. SBIN0001234" {...field} />
+                            <Input className="border-solar" placeholder="e.g. SBIN0001234" {...field} value={field.value ?? ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Remarks (Optional) */}
-              <Card className="border-solar bg-solar-card shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-lg text-foreground">Remarks</CardTitle>
-                  <p className="text-sm text-muted-foreground">Any additional notes or observations (optional)</p>
-                </CardHeader>
-                <CardContent>
-                  <FormField
-                    control={form.control}
-                    name="remarks"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
-                          <Textarea
-                            className="border-solar min-h-[100px]"
-                            placeholder="Enter any remarks or observations..."
-                            {...field}
-                            value={field.value ?? ""}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </CardContent>
               </Card>
 

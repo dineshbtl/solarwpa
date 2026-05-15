@@ -7,33 +7,22 @@ import { SolarWatermark } from "@/components/solar-watermark"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, MapPin, CheckCircle, XCircle, UserCog, Pencil, FileImage, ChevronLeft, ChevronRight, X } from "lucide-react"
-import { mockSurveys } from "@/lib/mock-data"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
 import * as surveysData from "@/lib/data/surveys"
-import { getUserById, listUsers, seedUsers } from "@/lib/store/users"
+import * as installationsData from "@/lib/data/installations"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createInstallation, listInstallations } from "@/lib/store/installations"
-import { getInspectionByInstallationId } from "@/lib/store/inspections"
 import { useRole } from "@/contexts/role-context"
 import { WorkflowSummarySection } from "@/components/workflow-summary-section"
-import { useSurvey } from "@/lib/data/hooks"
+import { useSurvey, useUsers, useInstallationBySurveyId, useInspectionByInstallationId } from "@/lib/data/hooks"
 import { Skeleton } from "@/components/ui/skeleton"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
+import type { User } from "@/lib/store/users"
 import type { SurveyUploadKeys } from "@/lib/store/surveys"
+import { extractStoragePathFromUrl, rewriteStorageUrl } from "@/lib/supabase/installation-photo-urls"
+import { formatSafeDateTime } from "@/lib/format-safe-date"
 
 const BUCKET = "solar_bucket"
-
-function extractStoragePath(publicUrl: string): string | null {
-  const marker = `/object/public/${BUCKET}/`
-  const idx = publicUrl.indexOf(marker)
-  if (idx >= 0) return publicUrl.slice(idx + marker.length)
-  const marker2 = `/storage/v1/object/public/${BUCKET}/`
-  const idx2 = publicUrl.indexOf(marker2)
-  if (idx2 >= 0) return publicUrl.slice(idx2 + marker2.length)
-  return null
-}
 
 function useSignedUploadUrls(
   uploads: Record<string, { name?: string; url?: string }> | undefined
@@ -41,21 +30,27 @@ function useSignedUploadUrls(
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    if (!uploads || !isSupabaseConfigured()) return
+    if (!uploads) return
     let cancelled = false
 
     async function resolve() {
+      const rewrittenMap: Record<string, string> = {}
+      const entries = Object.entries(uploads!).filter(
+        ([, meta]) => meta?.url && !meta.url.startsWith("data:")
+      )
+      for (const [key, meta] of entries) {
+        rewrittenMap[key] = rewriteStorageUrl(meta.url!)
+      }
+      if (!cancelled) setSignedUrls(rewrittenMap)
+
       try {
         const { getSupabaseBrowserClient } = await import("@/lib/supabase/client")
         const supabase = getSupabaseBrowserClient()
-        const entries = Object.entries(uploads!).filter(
-          ([, meta]) => meta?.url && !meta.url.startsWith("data:")
-        )
         if (entries.length === 0) return
 
         const paths = entries
           .map(([key, meta]) => {
-            const path = extractStoragePath(meta.url!)
+            const path = extractStoragePathFromUrl(meta.url!)
             return path ? { key, path } : null
           })
           .filter(Boolean) as { key: string; path: string }[]
@@ -70,13 +65,13 @@ function useSignedUploadUrls(
           )
 
         if (error || !data || cancelled) return
-        const map: Record<string, string> = {}
+        const map: Record<string, string> = { ...rewrittenMap }
         data.forEach((item, i) => {
           if (item.signedUrl) map[paths[i].key] = item.signedUrl
         })
         if (!cancelled) setSignedUrls(map)
       } catch {
-        // signed URL generation failed; fall back to stored URLs
+        // signed URL generation failed; rewritten public URLs already set as fallback
       }
     }
 
@@ -299,18 +294,25 @@ export default function SurveyDetailPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const id = params?.id ?? null
-  const { canApproveSurveys } = useRole()
+  const { canApproveSurveys, role, resolvePermissionsForRole } = useRole()
   const [remarks, setRemarks] = useState("")
   const [installerId, setInstallerId] = useState<string>("__none__")
 
-  const { data: surveyFromDb, loading, error, refetch } = useSurvey(id)
-  const legacySurvey = !isSupabaseConfigured() && id ? mockSurveys.find((s) => s.id === id) : null
-  const isStored = !!surveyFromDb
-  const survey = surveyFromDb ?? legacySurvey ?? null
+  const { data: survey, loading, error, refetch } = useSurvey(id)
+  const { data: users = [] } = useUsers()
+  const installerUsers = users.filter((u) => u.role === "installer")
+  const { data: linkedInstallation, refetch: refetchLinkedInstallation } = useInstallationBySurveyId(id)
+  const { data: linkedInspection } = useInspectionByInstallationId(linkedInstallation?.id ?? null)
+  const rolePermissions = resolvePermissionsForRole(role)
+  const canManageInstallationFlow =
+    canApproveSurveys ||
+    rolePermissions.includes("create_installations") ||
+    rolePermissions.includes("assign_staff")
 
-  useEffect(() => {
-    seedUsers()
-  }, [])
+  const getUserById = useCallback(
+    (uid: string | undefined) => (uid ? users.find((u) => u.id === uid) : undefined),
+    [users]
+  )
 
   const signedUrls = useSignedUploadUrls(survey?.uploads as Record<string, { name?: string; url?: string }> | undefined)
 
@@ -357,10 +359,6 @@ export default function SurveyDetailPage() {
   }
 
   const handleApprove = async () => {
-    if (!isStored) {
-      toast({ title: "Demo record", description: "This survey comes from mock data and can't be updated." })
-      return
-    }
     if (!id) return
     try {
       await surveysData.updateSurveyStatus(id, "approved")
@@ -372,10 +370,6 @@ export default function SurveyDetailPage() {
   }
 
   const handleReject = async () => {
-    if (!isStored) {
-      toast({ title: "Demo record", description: "This survey comes from mock data and can't be updated." })
-      return
-    }
     if (!remarks.trim()) {
       toast({ title: "Remarks required", description: "Please provide remarks for rejection.", variant: "destructive" })
       return
@@ -391,10 +385,6 @@ export default function SurveyDetailPage() {
   }
 
   const handleMarkCompleted = async () => {
-    if (!isStored) {
-      toast({ title: "Demo record", description: "This survey comes from mock data and can't be updated." })
-      return
-    }
     if (!id) return
     try {
       await surveysData.updateSurveyStatus(id, "completed")
@@ -410,10 +400,6 @@ export default function SurveyDetailPage() {
   }
 
   const handleAssignInstaller = async (installerIdValue: string) => {
-    if (!isStored) {
-      toast({ title: "Demo record", description: "This survey comes from mock data and can't be updated." })
-      return
-    }
     if (!params?.id) return
     const nextId = installerIdValue === "__none__" ? undefined : installerIdValue
     try {
@@ -427,56 +413,60 @@ export default function SurveyDetailPage() {
   }
 
   const handleCreateInstallation = async () => {
-    if (!isStored) {
-      toast({ title: "Demo record", description: "This survey comes from mock data." })
-      return
-    }
     if (!id) return
     if (!survey.installerId) {
-      toast({ title: "Assign installer first", description: "Please assign an installer (engineer) first.", variant: "destructive" })
+      toast({ title: "Assign installer first", description: "Please assign an installer first.", variant: "destructive" })
       return
     }
-    const existing = listInstallations().find((i) => i.surveyId === id)
-    if (existing) {
-      toast({ title: "Installation already exists", description: `Opening ${existing.id}` })
-      router.push(`/installations/${existing.id}`)
+    if (linkedInstallation) {
+      toast({ title: "Installation already exists", description: `Opening ${linkedInstallation.id}` })
+      router.push(`/installations/${linkedInstallation.id}`)
       return
     }
     const engineer = getUserById(survey.installerId)
-    const created = createInstallation(
-      {
-        surveyId: id,
-        customerName: survey.beneficiaryName,
-        address: survey.siteLocation?.address || `${survey.siteLocation?.district || ""} ${survey.siteLocation?.pinCode || ""}`.trim(),
-        engineerName: engineer?.name,
-        engineerId: engineer?.id,
-      },
-      { materials: [], photos: [] },
-    )
     try {
-      await surveysData.appendSurveyActivity(id, {
-        actorId: survey.installerId,
-        action: "installation_created",
-        message: `Installation created (${created.id})`,
-        meta: { installationId: created.id },
-      })
+      const created = await installationsData.createInstallation(
+        {
+          projectId: survey.projectId,
+          surveyId: id,
+          customerName: survey.beneficiaryName ?? "",
+          address:
+            survey.siteLocation?.address ||
+            `${survey.siteLocation?.district || ""} ${survey.siteLocation?.pinCode || ""}`.trim(),
+          engineerName: engineer?.name,
+          engineerId: engineer?.id,
+        },
+        { materials: [], photos: [] }
+      )
+      try {
+        await surveysData.appendSurveyActivity(id, {
+          actorId: survey.installerId,
+          action: "installation_created",
+          message: `Installation created (${created.id})`,
+          meta: { installationId: created.id },
+        })
+      } catch (_) {}
       await refetch()
-    } catch (_) {}
-    toast({ title: "Installation created", description: created.id })
-    router.push(`/installations/${created.id}`)
+      await refetchLinkedInstallation()
+      toast({ title: "Installation created", description: created.id })
+      router.push(`/installations/${created.id}`)
+    } catch (e) {
+      toast({
+        title: "Could not create installation",
+        description: e instanceof Error ? e.message : "Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const linkedInstallation = isStored && id ? listInstallations().find((i) => i.surveyId === id) : undefined
-  const linkedInspection = linkedInstallation ? getInspectionByInstallationId(linkedInstallation.id) : undefined
-
   // Manager: from activity (who did status_changed / installer_assigned) or first manager user
-  let managerUser: ReturnType<typeof getUserById> = listUsers().find((u) => u.role === "manager" || u.role === "admin")
-  if (isStored && Array.isArray(survey.activity)) {
+  let managerUser: User | undefined = users.find((u) => u.role === "manager" || u.role === "admin")
+  if (Array.isArray(survey.activity)) {
     const byManager = survey.activity
       .slice()
       .sort((a: any, b: any) => String(b.at).localeCompare(String(a.at)))
       .map((e: any) => (e.actorId ? getUserById(e.actorId) : null))
-      .find((u: ReturnType<typeof getUserById>) => u?.role === "manager" || u?.role === "admin")
+      .find((u: User | null | undefined) => u?.role === "manager" || u?.role === "admin")
     if (byManager) managerUser = byManager
   }
   const surveyorUser = survey.submittedById ? getUserById(survey.submittedById) : null
@@ -485,7 +475,7 @@ export default function SurveyDetailPage() {
   const inspectorNameDisplay = linkedInspection?.governmentInspection?.inspectorName ?? inspectorUser?.name
 
   // Approved by: from activity (who set status to approved)
-  const approvedByEvent = isStored && Array.isArray(survey.activity)
+  const approvedByEvent = Array.isArray(survey.activity)
     ? survey.activity.find((e: any) => e.action === "status_changed" && (e.meta as any)?.status === "approved")
     : null
   const approvedByUser = approvedByEvent?.actorId ? getUserById(approvedByEvent.actorId) : null
@@ -525,10 +515,12 @@ export default function SurveyDetailPage() {
     gps: "—",
     captured: "—",
   }
-  const beneficiaryName = isStored ? (survey.beneficiaryName || dummy.beneficiary) : (survey.customerName ?? dummy.beneficiary)
-  const surveyorName = isStored && survey.submittedById ? (getUserById(survey.submittedById)?.name ?? survey.submittedById) : (survey as any).engineerName ?? dummy.beneficiary
-  const gpsLat = isStored ? (survey.siteDetails?.gpsLat ?? dummy.gps) : (survey.gpsLocation?.lat != null ? String(survey.gpsLocation.lat) : dummy.gps)
-  const gpsLng = isStored ? (survey.siteDetails?.gpsLng ?? dummy.gps) : (survey.gpsLocation?.lng != null ? String(survey.gpsLocation.lng) : dummy.gps)
+  const beneficiaryName = survey.beneficiaryName || dummy.beneficiary
+  const surveyorName = survey.submittedById
+    ? (getUserById(survey.submittedById)?.name ?? survey.submittedById)
+    : dummy.beneficiary
+  const gpsLat = survey.siteDetails?.gpsLat ?? dummy.gps
+  const gpsLng = survey.siteDetails?.gpsLng ?? dummy.gps
 
   return (
     <div className="min-h-screen relative">
@@ -546,14 +538,14 @@ export default function SurveyDetailPage() {
           {/* Header */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <CardTitle className="text-2xl text-foreground">
-                    {isStored ? survey.beneficiaryName : survey.customerName}
+                    {survey.beneficiaryName}
                   </CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">Survey ID: {survey.id}</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
                       survey.status === "approved"
@@ -567,27 +559,12 @@ export default function SurveyDetailPage() {
                   >
                     {survey.status}
                   </span>
-                  {isStored ? (
-                    <Link href={`/surveys/${survey.id}/edit`}>
-                      <Button type="button" variant="outline" size="sm" className="border-solar bg-transparent">
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit
-                      </Button>
-                    </Link>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-solar bg-transparent"
-                      onClick={() =>
-                        toast({ title: "Demo record", description: "This survey comes from mock data and can't be edited." })
-                      }
-                    >
+                  <Link href={`/surveys/${survey.id}/edit`}>
+                    <Button type="button" variant="outline" size="sm" className="border-solar bg-transparent">
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
                     </Button>
-                  )}
+                  </Link>
                 </div>
               </div>
             </CardHeader>
@@ -596,13 +573,21 @@ export default function SurveyDetailPage() {
           {/* Workflow Summary — surveyor, approved by, installer, inspector (same section on survey/installation/inspection pages) */}
           <WorkflowSummarySection
             surveyorName={surveyorUser?.name ?? (survey as any).engineerName ?? "—"}
-            surveySubmitDate={survey.uploadDate ? new Date(survey.uploadDate).toLocaleString() : (survey.submittedAt ? new Date(survey.submittedAt).toLocaleString() : (survey as any).createdAt ? new Date((survey as any).createdAt).toLocaleString() : "—")}
+            surveySubmitDate={
+              survey.uploadDate
+                ? formatSafeDateTime(survey.uploadDate)
+                : survey.submittedAt
+                  ? formatSafeDateTime(survey.submittedAt)
+                  : (survey as any).createdAt
+                    ? formatSafeDateTime((survey as any).createdAt)
+                    : "—"
+            }
             approvedByName={approvedByUser?.name ?? "—"}
-            approvedDate={survey.approvedDate ? new Date(survey.approvedDate).toLocaleString() : "—"}
+            approvedDate={survey.approvedDate ? formatSafeDateTime(survey.approvedDate) : "—"}
             installerName={installerUser?.name ?? "—"}
-            installationDate={linkedInstallation?.createdAt ? new Date(linkedInstallation.createdAt).toLocaleString() : "—"}
+            installationDate={linkedInstallation?.createdAt ? formatSafeDateTime(linkedInstallation.createdAt) : "—"}
             inspectorName={inspectorNameDisplay ?? inspectorUser?.name ?? "—"}
-            inspectionDate={linkedInspection?.createdAt ? new Date(linkedInspection.createdAt).toLocaleString() : "—"}
+            inspectionDate={linkedInspection?.createdAt ? formatSafeDateTime(linkedInspection.createdAt) : "—"}
           />
 
           {/* 1. Consumer Details */}
@@ -618,7 +603,7 @@ export default function SurveyDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Mobile No.</p>
-                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.mobile : undefined, dummy.mobile)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.mobile, dummy.mobile)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Electricity Consumer No.</p>
@@ -626,7 +611,7 @@ export default function SurveyDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">DISCOM</p>
-                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.discomName : undefined, dummy.discom)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.discomName, dummy.discom)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Connection Type</p>
@@ -691,19 +676,19 @@ export default function SurveyDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Service No</p>
-                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.serviceNo : undefined, dummy.serviceNo)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.serviceNo, dummy.serviceNo)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Aadhar No</p>
-                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.aadharNo : undefined, dummy.aadhar)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.aadharNo, dummy.aadhar)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">PAN No</p>
-                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.panNo : undefined, dummy.pan)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.panNo, dummy.pan)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Mobile</p>
-                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.mobile : undefined, dummy.mobile)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.mobile, dummy.mobile)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Contracted Load</p>
@@ -765,7 +750,7 @@ export default function SurveyDetailPage() {
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Roof Type</p>
-                  <p className="mt-1 text-sm text-foreground">{v(isStored ? survey.roofType : undefined, dummy.roofType)}</p>
+                  <p className="mt-1 text-sm text-foreground">{v(survey.roofType, dummy.roofType)}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Available Roof Area (approx.)</p>
@@ -856,11 +841,11 @@ export default function SurveyDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 items-end">
-                <div><p className="text-sm font-medium text-muted-foreground">Type of Solar Power Plant</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.plantType : undefined, dummy.plantType)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Type of Solar Power Plant</p><p className="mt-1 text-sm text-foreground">{v(survey.plantType, dummy.plantType)}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Building Height</p><p className="mt-1 text-sm text-foreground">{survey.buildingHeight != null && survey.buildingHeight > 0 ? String(survey.buildingHeight) : dummy.height}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Total No of Roofs</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.totalRoofs : undefined, dummy.roofs)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Type of Roof</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.roofType : undefined, dummy.roofType)}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">DISCOM Name</p><p className="mt-1 text-sm text-foreground">{v(isStored ? survey.discomName : undefined, dummy.discom)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Total No of Roofs</p><p className="mt-1 text-sm text-foreground">{v(survey.totalRoofs, dummy.roofs)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Type of Roof</p><p className="mt-1 text-sm text-foreground">{v(survey.roofType, dummy.roofType)}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">DISCOM Name</p><p className="mt-1 text-sm text-foreground">{v(survey.discomName, dummy.discom)}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Meter AC Cable (m)</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.meterAcCableMeters != null ? String(survey.siteDetails.meterAcCableMeters) : "—"}</p></div>
                 <div><p className="text-sm font-medium text-muted-foreground">Meter DC Cable (m)</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.meterDcCableMeters != null ? String(survey.siteDetails.meterDcCableMeters) : "—"}</p></div>
               </div>
@@ -918,7 +903,7 @@ export default function SurveyDetailPage() {
               </div>
               <div className="grid gap-4 md:grid-cols-2 items-end">
                 <div><p className="text-sm font-medium text-muted-foreground">GPS Accuracy (m)</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.accuracyMeters != null ? String(survey.siteDetails.accuracyMeters) : dummy.gps}</p></div>
-                <div><p className="text-sm font-medium text-muted-foreground">Captured At</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.capturedAt ? new Date(survey.siteDetails.capturedAt).toLocaleString() : dummy.captured}</p></div>
+                <div><p className="text-sm font-medium text-muted-foreground">Captured At</p><p className="mt-1 text-sm text-foreground">{survey.siteDetails?.capturedAt ? formatSafeDateTime(survey.siteDetails.capturedAt) : dummy.captured}</p></div>
               </div>
               {gpsLat !== dummy.gps && gpsLng !== dummy.gps ? (
                 <Button variant="outline" size="sm" className="border-solar text-foreground bg-transparent" asChild>
@@ -943,8 +928,7 @@ export default function SurveyDetailPage() {
           {/* 6. Uploads (Optional) */}
           <UploadGallerySection survey={survey} signedUrls={signedUrls} />
 
-          {isStored && (
-            <Card className="border-solar bg-solar-card shadow-sm">
+          <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg text-foreground">Workflow</CardTitle>
               </CardHeader>
@@ -985,22 +969,23 @@ export default function SurveyDetailPage() {
                     <p className="mt-1 text-sm font-medium text-foreground capitalize">{survey.status}</p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Upload Date: {survey.uploadDate ? new Date(survey.uploadDate).toLocaleString() : "-"}
-                    {survey.approvedDate ? ` • Approved: ${new Date(survey.approvedDate).toLocaleString()}` : ""}
+                    Upload Date: {survey.uploadDate ? formatSafeDateTime(survey.uploadDate) : "-"}
+                    {survey.approvedDate ? ` • Approved: ${formatSafeDateTime(survey.approvedDate)}` : ""}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Submitted by:{" "}
                     <span className="font-medium">
                       {survey.submittedById ? getUserById(survey.submittedById)?.name ?? survey.submittedById : "-"}
                     </span>{" "}
-                    {survey.submittedAt ? `• ${new Date(survey.submittedAt).toLocaleString()}` : ""}
+                    {survey.submittedAt ? `• ${formatSafeDateTime(survey.submittedAt)}` : ""}
                   </p>
                 </div>
 
-                {canApproveSurveys && (
+                {canManageInstallationFlow && (
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">
-                      Assign Installer <span className="text-xs">(Engineer)</span>
+                      Assign installer{" "}
+                      <span className="text-xs font-normal">(Supervisor, engineer, or manager)</span>
                     </p>
                     <Select value={installerId} onValueChange={handleAssignInstaller}>
                       <SelectTrigger className="w-full">
@@ -1008,21 +993,28 @@ export default function SurveyDetailPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Unassigned</SelectItem>
-                        {listUsers()
-                          .filter((u) => u.role === "engineer")
-                          .map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.name} ({u.id})
-                            </SelectItem>
-                          ))}
+                        {installerUsers.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name} ({u.id})
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" onClick={handleApprove}>
+                    {installerUsers.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        No users with the Installer role yet. Add them under{" "}
+                        <Link href="/users" className="font-medium text-foreground underline underline-offset-2">
+                          Users
+                        </Link>
+                        .
+                      </p>
+                    )}
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" variant="outline" onClick={handleApprove} className="w-full sm:w-auto">
                         <CheckCircle className="mr-2 h-4 w-4" />
                         Approve
                       </Button>
-                      <Button type="button" variant="outline" onClick={handleMarkCompleted}>
+                      <Button type="button" variant="outline" onClick={handleMarkCompleted} className="w-full sm:w-auto">
                         <UserCog className="mr-2 h-4 w-4" />
                         Mark Completed
                       </Button>
@@ -1040,10 +1032,8 @@ export default function SurveyDetailPage() {
                 )}
               </CardContent>
             </Card>
-          )}
 
-          {isStored && (
-            <Card className="border-solar bg-solar-card shadow-sm">
+          <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg text-foreground">Linked Records</CardTitle>
                 <p className="text-sm text-muted-foreground">Quick navigation across workflow</p>
@@ -1080,11 +1070,9 @@ export default function SurveyDetailPage() {
                 </div>
               </CardContent>
             </Card>
-          )}
 
           {/* Manager, Surveyor, Installer & Inspection details — name, role, number */}
-          {isStored && (
-            <Card className="border-solar bg-solar-card shadow-sm">
+          <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg text-foreground">Assigned People &amp; Roles</CardTitle>
                 <p className="text-sm text-muted-foreground">Manager, Surveyor, Installer and Inspection details with name, role and contact</p>
@@ -1106,7 +1094,7 @@ export default function SurveyDetailPage() {
                     <p className="text-xs text-muted-foreground">{surveyorUser?.email ?? "—"}</p>
                   </div>
                   <div className="rounded-lg border border-solar bg-background p-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Installer (Engineer)</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Installer</p>
                     <p className="mt-1 text-sm font-medium text-foreground">{installerUser?.name ?? "—"}</p>
                     <p className="text-xs text-muted-foreground capitalize">{installerUser?.role ?? "—"}</p>
                     <p className="mt-1 text-xs text-muted-foreground">ID: {installerUser?.id ?? "—"}</p>
@@ -1122,11 +1110,9 @@ export default function SurveyDetailPage() {
                 </div>
               </CardContent>
             </Card>
-          )}
 
           {/* Activity Log — with name and role of actor */}
-          {isStored && (
-            <Card className="border-solar bg-solar-card shadow-sm">
+          <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg text-foreground">Activity Log</CardTitle>
                 <p className="text-sm text-muted-foreground">Who did what and when — with name and role</p>
@@ -1152,7 +1138,7 @@ export default function SurveyDetailPage() {
                                 {evt.message}
                               </p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {evt.at ? new Date(evt.at).toLocaleString() : "-"} • {String(evt.action).replace(/_/g, " ")}
+                                {evt.at ? formatSafeDateTime(evt.at) : "-"} • {String(evt.action).replace(/_/g, " ")}
                               </p>
                               {actor && (
                                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -1169,19 +1155,6 @@ export default function SurveyDetailPage() {
                 )}
               </CardContent>
             </Card>
-          )}
-
-          {/* Survey Notes - legacy only */}
-          {!isStored && (
-            <Card className="border-solar bg-solar-card shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg text-foreground">Survey Notes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-foreground">{survey.notes ?? "-"}</p>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Manager Actions - only for manager (or admin) */}
           {canApproveSurveys && survey.status === "pending" && (
@@ -1201,7 +1174,7 @@ export default function SurveyDetailPage() {
                     rows={3}
                   />
                 </div>
-                <div className="flex gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
                   <Button onClick={handleApprove} className="flex-1 bg-green-600 text-white hover:bg-green-700">
                     <CheckCircle className="mr-2 h-4 w-4" />
                     Approve Survey

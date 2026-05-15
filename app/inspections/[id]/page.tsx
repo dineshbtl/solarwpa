@@ -1,22 +1,26 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { useInstallationPhotoDisplayUrls } from "@/lib/supabase/installation-photo-urls"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SolarWatermark } from "@/components/solar-watermark"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Pencil } from "lucide-react"
-import { mockInspections, mockInstallations } from "@/lib/mock-data"
+import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Pencil, MapPin } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
 import * as inspectionsData from "@/lib/data/inspections"
 import * as installationsData from "@/lib/data/installations"
 import * as surveysData from "@/lib/data/surveys"
-import { getUserById, listUsers, seedUsers } from "@/lib/store/users"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useUsers } from "@/lib/data/hooks"
 import { WorkflowSummarySection } from "@/components/workflow-summary-section"
+import { parseStoredGps } from "@/lib/installation-photo-gps"
+import { formatSafeDateTime } from "@/lib/format-safe-date"
 import { useRole } from "@/contexts/role-context"
+
+import { InspectionDetailPageSkeleton } from "@/components/inspections-loading-skeletons"
 
 export default function InspectionDetailPage() {
   const router = useRouter()
@@ -27,54 +31,108 @@ export default function InspectionDetailPage() {
   const [inspection, setInspection] = useState<any>(null)
   const [installation, setInstallation] = useState<any>(null)
   const [linkedSurvey, setLinkedSurvey] = useState<any>(null)
-  const [isStored, setIsStored] = useState(false)
   const [inspectorId, setInspectorId] = useState<string>("__none__")
   const [loading, setLoading] = useState(true)
+  const { data: users = [] } = useUsers()
+  const getUserById = useCallback(
+    (uid: string | undefined) => (uid ? users.find((u) => u.id === uid) : undefined),
+    [users]
+  )
+
+  const installationPhotoUrlInputs = useMemo(() => {
+    const photos = installation?.photos
+    if (!Array.isArray(photos) || photos.length === 0) return []
+    return photos.map((p: Record<string, unknown>, i: number) => {
+      const pid = typeof p.id === "string" && p.id ? p.id : `photo-${i}`
+      const fileMeta = p.file ?? p.file_meta
+      const fileObj =
+        fileMeta && typeof fileMeta === "object" && !Array.isArray(fileMeta)
+          ? (fileMeta as Record<string, unknown>)
+          : null
+      const fileName = fileObj && typeof fileObj.name === "string" ? fileObj.name : undefined
+      return {
+        id: pid,
+        url: typeof p.url === "string" ? p.url : undefined,
+        category: typeof p.category === "string" ? p.category : undefined,
+        file: fileName ? { name: fileName } : undefined,
+      }
+    })
+  }, [installation])
+
+  const installationPhotoDisplayUrls = useInstallationPhotoDisplayUrls(
+    installationPhotoUrlInputs,
+    installation?.id
+  )
 
   useEffect(() => {
-    seedUsers()
     const loadData = async () => {
       if (!id) return
+      setLoading(true)
+      setInspection(null)
+      setInstallation(null)
+      setLinkedSurvey(null)
       try {
-        // Try to get from data layer (localStorage or Supabase)
         const storedInspection = await inspectionsData.getInspectionById(id)
-        if (storedInspection) {
-          setInspection(storedInspection)
-          setIsStored(true)
-          setInspectorId(storedInspection.inspectorId ?? "__none__")
-          const storedInstallation = await installationsData.getInstallationById(storedInspection.installationId)
-          setInstallation(storedInstallation ?? null)
-          // Load linked survey
-          const surveyId = storedInstallation?.surveyId ?? storedInspection.surveyId
-          if (surveyId) {
-            const survey = await surveysData.getSurveyById(surveyId)
-            setLinkedSurvey(survey ?? null)
-          }
-          setLoading(false)
+        if (!storedInspection) {
           return
         }
-        // Fall back to mock data
-        const foundInspection = mockInspections.find((i) => i.id === id)
-        if (foundInspection) {
-          setInspection(foundInspection)
-          const foundInstallation = mockInstallations.find((inst) => inst.id === foundInspection.installationId)
-          setInstallation(foundInstallation)
-          setIsStored(false)
+        setInspection(storedInspection)
+        setInspectorId(storedInspection.inspectorId ?? "__none__")
+        const storedInstallation = await installationsData.getInstallationById(storedInspection.installationId)
+        setInstallation(storedInstallation ?? null)
+        const surveyId = storedInstallation?.surveyId ?? (storedInspection as { surveyId?: string }).surveyId
+        if (surveyId) {
+          const survey = await surveysData.getSurveyById(surveyId)
+          setLinkedSurvey(survey ?? null)
         }
       } catch (e) {
         console.error("Error loading inspection:", e)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     loadData()
   }, [id])
 
-  if (loading || !inspection || !installation) {
+  if (loading) {
+    return <InspectionDetailPageSkeleton showWatermark />
+  }
+
+  if (!inspection) {
     return (
-      <div className="min-h-screen bg-gradient-dark-green relative">
+      <div className="min-h-full bg-page relative">
         <SolarWatermark />
         <main className="mx-auto max-w-7xl px-4 py-8 relative z-10">
-          <p className="text-white">Loading...</p>
+          <p className="text-muted-foreground">Inspection not found.</p>
+          <Link href="/inspections">
+            <Button variant="outline" className="mt-4">
+              Back to Inspections
+            </Button>
+          </Link>
+        </main>
+      </div>
+    )
+  }
+
+  if (!installation) {
+    return (
+      <div className="min-h-full bg-page relative">
+        <SolarWatermark />
+        <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 relative z-10">
+          <Link href="/inspections">
+            <Button variant="ghost" className="mb-6 text-primary hover:bg-muted">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Inspections
+            </Button>
+          </Link>
+          <Card className="border-solar bg-solar-card shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Linked installation missing</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Inspection {inspection.id} has no matching installation record ({inspection.installationId}). It may have been removed or the link is invalid.
+              </p>
+            </CardHeader>
+          </Card>
         </main>
       </div>
     )
@@ -88,10 +146,6 @@ export default function InspectionDetailPage() {
   const inspectorNameDisplay = inspection.governmentInspection?.inspectorName ?? inspectorUser?.name
 
   const handleAssignInspector = async (value: string) => {
-    if (!isStored) {
-      toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated." })
-      return
-    }
     if (!id) return
     try {
       const nextId = value === "__none__" ? undefined : value
@@ -109,10 +163,6 @@ export default function InspectionDetailPage() {
       toast({ title: "Remarks required", description: "Please provide inspection remarks.", variant: "destructive" })
       return
     }
-    if (!isStored) {
-      toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated.", variant: "destructive" })
-      return
-    }
     try {
       if (!id) return
       const actorName = inspection.inspectorId ? getUserById(inspection.inspectorId)?.name : undefined
@@ -128,10 +178,6 @@ export default function InspectionDetailPage() {
   const handleGovReject = async () => {
     if (!govRemarks) {
       toast({ title: "Remarks required", description: "Please provide remarks for rejection.", variant: "destructive" })
-      return
-    }
-    if (!isStored) {
-      toast({ title: "Demo record", description: "This inspection comes from mock data and can't be updated.", variant: "destructive" })
       return
     }
     try {
@@ -161,7 +207,7 @@ export default function InspectionDetailPage() {
           {/* Header */}
           <Card className="border-solar bg-solar-card shadow-sm">
             <CardHeader>
-              <div className="flex items-start justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <CardTitle className="text-2xl text-foreground">{inspection.customerName}</CardTitle>
                   <p className="mt-1 text-sm text-muted-foreground">Inspection ID: {inspection.id}</p>
@@ -179,27 +225,12 @@ export default function InspectionDetailPage() {
                 </span>
               </div>
               <div className="mt-4 flex justify-end">
-                {isStored ? (
-                  <Link href={`/inspections/${inspection.id}/edit`}>
-                    <Button type="button" variant="outline" size="sm" className="border-solar bg-transparent">
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                  </Link>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="border-solar bg-transparent"
-                    onClick={() =>
-                      toast({ title: "Demo record", description: "This inspection comes from mock data and can't be edited." })
-                    }
-                  >
+                <Link href={`/inspections/${inspection.id}/edit`}>
+                  <Button type="button" variant="outline" size="sm" className="border-solar bg-transparent">
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </Button>
-                )}
+                </Link>
               </div>
             </CardHeader>
           </Card>
@@ -207,17 +238,22 @@ export default function InspectionDetailPage() {
           {/* Workflow Summary — same section on survey, installation, inspection pages */}
           <WorkflowSummarySection
             surveyorName={linkedSurvey?.submittedById ? (getUserById(linkedSurvey.submittedById)?.name ?? "—") : "—"}
-            surveySubmitDate={linkedSurvey?.uploadDate ? new Date(linkedSurvey.uploadDate).toLocaleString() : linkedSurvey?.submittedAt ? new Date(linkedSurvey.submittedAt).toLocaleString() : "—"}
+            surveySubmitDate={
+              linkedSurvey?.uploadDate
+                ? formatSafeDateTime(linkedSurvey.uploadDate)
+                : linkedSurvey?.submittedAt
+                  ? formatSafeDateTime(linkedSurvey.submittedAt)
+                  : "—"
+            }
             approvedByName={approvedByUser?.name ?? "—"}
-            approvedDate={linkedSurvey?.approvedDate ? new Date(linkedSurvey.approvedDate).toLocaleString() : "—"}
+            approvedDate={linkedSurvey?.approvedDate ? formatSafeDateTime(linkedSurvey.approvedDate) : "—"}
             installerName={installation.engineerName ?? (installation.engineerId ? getUserById(installation.engineerId)?.name : null) ?? "—"}
-            installationDate={installation.createdAt ? new Date(installation.createdAt).toLocaleString() : "—"}
+            installationDate={installation.createdAt ? formatSafeDateTime(installation.createdAt) : "—"}
             inspectorName={inspectorNameDisplay ?? inspectorUser?.name ?? "—"}
-            inspectionDate={inspection.createdAt ? new Date(inspection.createdAt).toLocaleString() : "—"}
+            inspectionDate={inspection.createdAt ? formatSafeDateTime(inspection.createdAt) : "—"}
           />
 
-          {isStored && (
-            <Card className="border-solar bg-solar-card shadow-sm">
+          <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg text-foreground">Inspector Assignment</CardTitle>
                 <p className="text-sm text-muted-foreground">Assign a govt-role user to approve/reject</p>
@@ -229,7 +265,7 @@ export default function InspectionDetailPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">Unassigned</SelectItem>
-                    {listUsers()
+                    {users
                       .filter((u) => u.role === "government")
                       .map((u) => (
                         <SelectItem key={u.id} value={u.id}>
@@ -244,7 +280,6 @@ export default function InspectionDetailPage() {
                 </p>
               </CardContent>
             </Card>
-          )}
 
           {/* Installation Reference */}
           <Card className="border-solar bg-solar-card shadow-sm">
@@ -290,11 +325,15 @@ export default function InspectionDetailPage() {
             <CardContent>
               {(installation.photos && installation.photos.length > 0) || (installation.installationImages && installation.installationImages.length > 0) ? (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {((installation.photos || installation.installationImages) as Array<{id?: string, url?: string, description?: string, category?: string}>).map((image: any, idx: number) => (
-                    <div key={image.id || idx} className="space-y-2">
+                  {((installation.photos || installation.installationImages) as Array<{id?: string, url?: string, description?: string, category?: string}>).map((image: any, idx: number) => {
+                    const stableId = typeof image.id === "string" && image.id ? image.id : `photo-${idx}`
+                    const resolved = installationPhotoDisplayUrls[stableId] || image.url
+                    const gps = parseStoredGps(image as Record<string, unknown>)
+                    return (
+                    <div key={stableId} className="space-y-2">
                       <div className="overflow-hidden rounded-lg border border-solar">
                         <img
-                          src={image.url || "/placeholder.svg"}
+                          src={resolved || "/placeholder.svg"}
                           alt={image.description || "Installation photo"}
                           className="h-64 w-full object-cover"
                         />
@@ -304,9 +343,26 @@ export default function InspectionDetailPage() {
                           {(image.category ?? "").replace(/_/g, " ") || "photo"}
                         </span>
                         <p className="mt-1 text-sm text-muted-foreground">{image.description || "-"}</p>
+                        {gps && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <MapPin className="h-3.5 w-3.5 shrink-0" />
+                            <span className="font-mono">
+                              {gps.latitude.toFixed(6)}, {gps.longitude.toFixed(6)}
+                              {gps.gpsAccuracyMeters != null ? ` (±${gps.gpsAccuracyMeters} m)` : ""}
+                            </span>
+                            <a
+                              href={`https://www.google.com/maps?q=${encodeURIComponent(String(gps.latitude))},${encodeURIComponent(String(gps.longitude))}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-solar-dark underline-offset-2 hover:underline"
+                            >
+                              Maps
+                            </a>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">No photos available.</p>
@@ -367,15 +423,15 @@ export default function InspectionDetailPage() {
                       rows={3}
                     />
                   </div>
-                  <div className="flex gap-4">
-                    <Button onClick={handleGovApprove} className="flex-1 bg-green-600 text-white hover:bg-green-700">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
+                    <Button onClick={handleGovApprove} className="w-full flex-1 bg-green-600 text-white hover:bg-green-700">
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Approve
                     </Button>
                     <Button
                       onClick={handleGovReject}
                       variant="outline"
-                      className="flex-1 border-red-600 text-destructive hover:bg-destructive/10 bg-transparent"
+                      className="w-full flex-1 border-red-600 text-destructive hover:bg-destructive/10 bg-transparent"
                     >
                       <XCircle className="mr-2 h-4 w-4" />
                       Reject
@@ -387,7 +443,7 @@ export default function InspectionDetailPage() {
           </Card>
 
           {/* Activity Log */}
-          {isStored && Array.isArray(inspection.activity) && inspection.activity.length > 0 && (
+          {Array.isArray(inspection.activity) && inspection.activity.length > 0 && (
             <Card className="border-solar bg-solar-card shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg text-foreground">Activity Log</CardTitle>
@@ -408,7 +464,7 @@ export default function InspectionDetailPage() {
                               <span className="font-medium">{actor}</span> — {evt.message}
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {evt.at ? new Date(evt.at).toLocaleString() : "-"} • {evt.action}
+                              {evt.at ? formatSafeDateTime(evt.at) : "-"} • {evt.action}
                             </p>
                           </div>
                         </div>

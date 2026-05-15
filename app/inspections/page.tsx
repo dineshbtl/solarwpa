@@ -1,87 +1,62 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { CheckCircle, Search, Filter, LayoutGrid, Table2, Pencil } from "lucide-react"
-import { mockInspections } from "@/lib/mock-data"
+import { CheckCircle, Search, Filter, LayoutGrid, Table2, Pencil, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useInspections, useUsers } from "@/lib/data/hooks"
-import { seedUsers } from "@/lib/data/users"
+import { useInspectionsPaginated, useUsers } from "@/lib/data/hooks"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
-import { toast } from "@/hooks/use-toast"
+import { InspectionsListPageSkeleton } from "@/components/inspections-loading-skeletons"
 
 export default function InspectionsPage() {
-  const { data: storedList = [], refetch } = useInspections()
-  const { data: users = [], refetch: refetchUsers } = useUsers()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [view, setView] = useState<"cards" | "table">("cards")
-  const [pageSize, setPageSize] = useState<10 | 25 | 50>(10)
-  const [page, setPage] = useState(1)
+  const {
+    data: items,
+    total,
+    loading,
+    error,
+    page,
+    pageSize,
+    search,
+    statusFilter,
+    setPage,
+    setPageSize,
+    setSearch,
+    setStatusFilter,
+  } = useInspectionsPaginated()
 
-  useEffect(() => {
-    seedUsers().then(() => refetchUsers())
-  }, [refetchUsers])
+  const { data: users = [] } = useUsers()
+  const [view, setView] = useState<"cards" | "table">("cards")
+
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleSearchChange = (value: string) => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current)
+    searchTimeout.current = setTimeout(() => setSearch(value), 300)
+  }
 
   const getUserById = (id: string) => users.find((u) => u.id === id)
 
-  const allInspections = useMemo(() => {
-    const stored = storedList.map((i) => ({
-      kind: "stored" as const,
-      id: i.id,
-      status: i.status,
-      customerName: i.customerName,
-      address: i.address,
-      installationId: i.installationId,
-      inspectorId: i.inspectorId ?? "",
-      managerApproved: i.managerApproval.approved,
-      governmentApproved: Boolean(i.governmentInspection?.approved),
-      createdAt: i.createdAt,
-    }))
-    const legacy = mockInspections.map((i) => ({
-      kind: "legacy" as const,
-      id: i.id,
-      status: i.status,
-      customerName: i.customerName,
-      address: i.address,
-      installationId: i.installationId,
-      inspectorId: "",
-      managerApproved: i.managerApproval.approved,
-      governmentApproved: Boolean(i.governmentInspection?.approved),
-      createdAt: i.createdAt,
-    }))
-    return [...stored, ...legacy]
-  }, [storedList])
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const showInitialSkeleton = loading && items.length === 0
+  const showRefreshing = loading && items.length > 0
 
-  const filteredInspections = allInspections.filter((inspection: any) => {
-    const matchesSearch =
-      inspection.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inspection.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inspection.id.toLowerCase().includes(searchQuery.toLowerCase())
+  if (showInitialSkeleton) {
+    return <InspectionsListPageSkeleton />
+  }
 
-    const matchesStatus = statusFilter === "all" || inspection.status === statusFilter
-
-    return matchesSearch && matchesStatus
-  })
-
-  useEffect(() => {
-    seedUsers()
-    setPage(1)
-  }, [searchQuery, statusFilter, pageSize])
-
-  const totalPages = Math.max(1, Math.ceil(filteredInspections.length / pageSize))
-  const safePage = Math.min(page, totalPages)
-  const startIndex = (safePage - 1) * pageSize
-  const endIndex = startIndex + pageSize
-  const pageItems = filteredInspections.slice(startIndex, endIndex)
+  if (error) {
+    return (
+      <div className="w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <p className="text-destructive">Could not load inspections. Please refresh.</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen p-6 sm:p-8">
+    <div className="w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-8 pb-10">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground">Inspections</h1>
         <p className="mt-1 text-muted-foreground">Review and approve completed installations</p>
@@ -95,12 +70,12 @@ export default function InspectionsPage() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search by customer name, address, or ID..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                defaultValue={search}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="border-border bg-background pl-9 rounded-lg"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
               <SelectTrigger className="w-full border-border bg-background sm:w-[200px] rounded-lg">
                 <Filter className="mr-2 h-4 w-4" />
                 <SelectValue placeholder="Filter by status" />
@@ -121,11 +96,16 @@ export default function InspectionsPage() {
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="text-lg">Inspection List ({filteredInspections.length})</CardTitle>
+              <CardTitle className="text-lg inline-flex items-center gap-2">
+                Inspection List ({total})
+                {showRefreshing ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Refreshing list" />
+                ) : null}
+              </CardTitle>
               <p className="text-sm text-muted-foreground">Includes inspection requests created from installations</p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v) as 10 | 25 | 50)}>
+              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
                 <SelectTrigger className="w-full sm:w-[140px]">
                   <SelectValue />
                 </SelectTrigger>
@@ -154,136 +134,143 @@ export default function InspectionsPage() {
         <CardContent>
           <Tabs value={view} onValueChange={(v) => setView(v as "cards" | "table")}>
             <TabsContent value="cards">
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {pageItems.map((inspection: any) => (
-                  <Link key={`${inspection.kind}-${inspection.id}`} href={`/inspections/${inspection.id}`}>
-                    <Card className="h-full border-border bg-card shadow-sm transition-all hover:shadow-lg rounded-xl">
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="rounded-lg bg-gradient-light-green p-2">
-                            <CheckCircle className="h-5 w-5 text-white" />
+              {showInitialSkeleton ? (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {Array.from({ length: pageSize }).map((_, i) => (
+                    <div key={i} className="h-52 animate-pulse rounded-xl bg-muted" />
+                  ))}
+                </div>
+              ) : items.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">No inspections found.</p>
+              ) : (
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {items.map((inspection) => (
+                    <Link key={inspection.id} href={`/inspections/${inspection.id}`}>
+                      <Card className="h-full border-border bg-card shadow-sm transition-all hover:shadow-lg rounded-xl">
+                        <CardHeader>
+                          <div className="flex items-start justify-between">
+                            <div className="rounded-lg bg-gradient-light-green p-2">
+                              <CheckCircle className="h-5 w-5 text-white" />
+                            </div>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                inspection.status === "approved"
+                                  ? "bg-green-100 text-green-800"
+                                  : inspection.status === "rejected"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {inspection.status}
+                            </span>
                           </div>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                              inspection.status === "approved"
-                                ? "bg-green-100 text-green-800"
-                                : inspection.status === "rejected"
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                            }`}
-                          >
-                            {inspection.status}
-                          </span>
-                        </div>
-                        <CardTitle className="mt-4 text-lg text-foreground">{inspection.customerName}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Address</p>
-                            <p className="text-sm text-foreground">{inspection.address.split(",").slice(0, 2).join(",")}</p>
-                          </div>
-                          <div className="flex items-center justify-between">
+                          <CardTitle className="mt-4 text-lg text-foreground">{inspection.customerName}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3">
                             <div>
-                              <p className="text-sm font-medium text-muted-foreground">Inspection ID</p>
-                              <p className="text-sm font-semibold text-foreground">{inspection.id}</p>
+                              <p className="text-sm font-medium text-muted-foreground">Address</p>
+                              <p className="text-sm text-foreground">{inspection.address.split(",").slice(0, 2).join(",")}</p>
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-muted-foreground">Installation</p>
-                              <p className="text-sm font-semibold text-foreground">{inspection.installationId}</p>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-muted-foreground">Inspection ID</p>
+                                <p className="text-sm font-semibold text-foreground">{inspection.id}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-muted-foreground">Installation</p>
+                                <p className="text-sm font-semibold text-foreground">{inspection.installationId}</p>
+                              </div>
+                            </div>
+                            <div className="space-y-2 pt-2">
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className={`h-4 w-4 ${inspection.managerApproval.approved ? "text-green-600" : "text-muted-foreground"}`} />
+                                <span className="text-xs text-muted-foreground">Manager Approval</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className={`h-4 w-4 ${inspection.governmentInspection?.approved ? "text-green-600" : "text-muted-foreground"}`} />
+                                <span className="text-xs text-muted-foreground">Government Inspection</span>
+                              </div>
                             </div>
                           </div>
-                          <div className="space-y-2 pt-2">
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className={`h-4 w-4 ${inspection.managerApproved ? "text-green-600" : "text-muted-foreground300"}`} />
-                              <span className="text-xs text-muted-foreground">Manager Approval</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className={`h-4 w-4 ${inspection.governmentApproved ? "text-green-600" : "text-muted-foreground300"}`} />
-                              <span className="text-xs text-muted-foreground">Government Inspection</span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
-            <TabsContent value="table">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Installation</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Manager</TableHead>
-                    <TableHead>Gov</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Inspector</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pageItems.map((i: any) => (
-                    <TableRow key={`${i.kind}-${i.id}`}>
-                      <TableCell className="font-medium">
-                        <Link href={`/inspections/${i.id}`} className="underline underline-offset-4">
-                          {i.id}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{i.customerName}</TableCell>
-                      <TableCell>{i.installationId}</TableCell>
-                      <TableCell>{i.status}</TableCell>
-                      <TableCell>{i.managerApproved ? "Approved" : "Pending"}</TableCell>
-                      <TableCell>{i.governmentApproved ? "Approved" : "Pending"}</TableCell>
-                      <TableCell>{i.createdAt ? new Date(i.createdAt).toLocaleDateString() : "-"}</TableCell>
-                      <TableCell>
-                        {i.kind === "stored" && i.inspectorId ? getUserById(i.inspectorId)?.name ?? i.inspectorId : "-"}
-                      </TableCell>
-                      <TableCell>
-                        {i.kind === "stored" ? (
-                          <Link href={`/inspections/${i.id}/edit`} className="inline-flex items-center text-sm underline underline-offset-4">
-                            <Pencil className="mr-1 h-4 w-4" />
-                            Edit
-                          </Link>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="px-2"
-                            onClick={() =>
-                              toast({ title: "Demo record", description: "This inspection comes from mock data and can't be edited." })
-                            }
-                          >
-                            <Pencil className="mr-1 h-4 w-4" />
-                            Edit
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {pageItems.length === 0 && (
+            <TabsContent value="table" className="min-h-0">
+                <Table className="min-w-[980px]">
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
-                        No inspections found.
-                      </TableCell>
+                      <TableHead className="sticky left-0 z-20 bg-card shadow-[8px_0_10px_-8px_rgba(0,0,0,0.18)]">ID</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Installation</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Manager</TableHead>
+                      <TableHead>Gov</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Inspector</TableHead>
+                      <TableHead className="sticky right-0 z-20 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.18)]">Actions</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {showInitialSkeleton ? (
+                      Array.from({ length: pageSize }).map((_, i) => (
+                        <TableRow key={i}>
+                          {Array.from({ length: 9 }).map((__, j) => (
+                            <TableCell key={j}>
+                              <div className="h-4 animate-pulse rounded bg-muted" />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : items.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                          No inspections found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      items.map((i) => (
+                        <TableRow key={i.id}>
+                          <TableCell className="sticky left-0 z-10 bg-card font-medium shadow-[8px_0_10px_-8px_rgba(0,0,0,0.12)]">
+                            <Link href={`/inspections/${i.id}`} className="underline underline-offset-4">
+                              {i.id}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{i.customerName}</TableCell>
+                          <TableCell>{i.installationId}</TableCell>
+                          <TableCell>{i.status}</TableCell>
+                          <TableCell>{i.managerApproval.approved ? "Approved" : "Pending"}</TableCell>
+                          <TableCell>{i.governmentInspection?.approved ? "Approved" : "Pending"}</TableCell>
+                          <TableCell>{i.createdAt ? new Date(i.createdAt).toLocaleDateString() : "—"}</TableCell>
+                          <TableCell>
+                            {i.inspectorId ? getUserById(i.inspectorId)?.name ?? i.inspectorId : "—"}
+                          </TableCell>
+                          <TableCell className="sticky right-0 z-10 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.12)]">
+                            <Link href={`/inspections/${i.id}/edit`} className="inline-flex min-h-9 items-center text-sm underline underline-offset-4">
+                              <Pencil className="mr-1 h-4 w-4" />
+                              Edit
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
             </TabsContent>
           </Tabs>
 
-          {filteredInspections.length > 0 && (
+          {/* Pagination */}
+          {total > 0 && (
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">
-                Showing <span className="font-medium">{startIndex + 1}</span>–
-                <span className="font-medium">{Math.min(endIndex, filteredInspections.length)}</span> of{" "}
-                <span className="font-medium">{filteredInspections.length}</span>
+                Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span>–
+                <span className="font-medium">{Math.min(page * pageSize, total)}</span> of{" "}
+                <span className="font-medium">{total}</span>
               </p>
 
               <Pagination className="justify-end">
@@ -291,26 +278,20 @@ export default function InspectionsPage() {
                   <PaginationItem>
                     <PaginationPrevious
                       href="#"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        setPage((p) => Math.max(1, p - 1))
-                      }}
-                      aria-disabled={safePage === 1}
-                      className={safePage === 1 ? "pointer-events-none opacity-50" : ""}
+                      onClick={(e) => { e.preventDefault(); setPage(Math.max(1, page - 1)) }}
+                      aria-disabled={page === 1}
+                      className={page === 1 ? "pointer-events-none opacity-50" : ""}
                     />
                   </PaginationItem>
 
-                  {Array.from({ length: totalPages }).slice(0, 7).map((_, idx) => {
+                  {Array.from({ length: Math.min(totalPages, 7) }).map((_, idx) => {
                     const pageNum = idx + 1
                     return (
                       <PaginationItem key={pageNum}>
                         <PaginationLink
                           href="#"
-                          isActive={pageNum === safePage}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            setPage(pageNum)
-                          }}
+                          isActive={pageNum === page}
+                          onClick={(e) => { e.preventDefault(); setPage(pageNum) }}
                         >
                           {pageNum}
                         </PaginationLink>
@@ -321,12 +302,9 @@ export default function InspectionsPage() {
                   <PaginationItem>
                     <PaginationNext
                       href="#"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        setPage((p) => Math.min(totalPages, p + 1))
-                      }}
-                      aria-disabled={safePage === totalPages}
-                      className={safePage === totalPages ? "pointer-events-none opacity-50" : ""}
+                      onClick={(e) => { e.preventDefault(); setPage(Math.min(totalPages, page + 1)) }}
+                      aria-disabled={page === totalPages}
+                      className={page === totalPages ? "pointer-events-none opacity-50" : ""}
                     />
                   </PaginationItem>
                 </PaginationContent>
@@ -335,8 +313,6 @@ export default function InspectionsPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Card/Table already shows empty state */}
     </div>
   )
 }

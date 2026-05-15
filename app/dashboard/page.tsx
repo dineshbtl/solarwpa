@@ -1,11 +1,11 @@
   "use client"
 
-import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ClipboardCheck, MapPin, Wrench, CheckCircle, TrendingUp, Loader2, ThumbsUp, ThumbsDown, ClipboardList, AlertCircle } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ClipboardCheck, MapPin, Wrench, CheckCircle, TrendingUp, ThumbsUp, ThumbsDown, ClipboardList, AlertCircle } from "lucide-react"
 import Link from "next/link"
-import { useProjects, useSurveys, useInstallations, useInspections } from "@/lib/data/hooks"
+import { useDashboard } from "@/lib/data/hooks"
 import type { Survey } from "@/lib/data/surveys"
 import type { Installation } from "@/lib/data/installations"
 import type { Inspection } from "@/lib/data/inspections"
@@ -17,49 +17,141 @@ function surveyAddress(s: Survey): string {
   return parts.length ? parts.join(", ") : s.serviceNo ?? "—"
 }
 
-export default function DashboardPage() {
-  const { data: projects = [], loading: projectsLoading } = useProjects()
-  const { data: surveys = [], loading: surveysLoading } = useSurveys()
-  const { data: installations = [], loading: installationsLoading } = useInstallations()
-  const { data: inspections = [], loading: inspectionsLoading } = useInspections()
-
-  const stats = useMemo(() => {
-    const now = new Date()
-    const thisMonth = now.getMonth()
-    const thisYear = now.getFullYear()
-    const completedThisMonth = installations.filter((i) => {
-      if (i.status !== "completed" || !i.completedAt) return false
-      const d = new Date(i.completedAt)
-      return d.getMonth() === thisMonth && d.getFullYear() === thisYear
-    }).length
-
-    const totalSurveys = surveys.length
-    const feasible = surveys.filter((s) => s.siteDetails?.overallFeasibility === "Feasible").length
-    const notFeasible = surveys.filter((s) => s.siteDetails?.overallFeasibility === "Not Feasible").length
-    const pendingAssessment = totalSurveys - feasible - notFeasible
-
-    return {
-      totalProjects: projects.length,
-      pendingSurveys: surveys.filter((s) => s.status === "pending").length,
-      activeInstallations: installations.filter(
-        (i) => i.status === "in_progress" || i.status === "pending" || i.status === "inspection_pending"
-      ).length,
-      completedThisMonth,
-      totalSurveys,
-      feasible,
-      notFeasible,
-      pendingAssessment,
-    }
-  }, [projects.length, surveys, installations])
-
-  const recentSurveys = useMemo(() => surveys.slice(0, 3), [surveys])
-  const displayInstallations = useMemo(() => installations.slice(0, 5), [installations])
-  const pendingInspections = useMemo(
-    () => inspections.filter((i) => i.status === "pending" || i.status === "reopened").slice(0, 5),
-    [inspections]
+function StatCardSkeleton() {
+  return (
+    <div className="rounded-xl bg-gradient-dark-green p-6 shadow-lg">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 space-y-3">
+          <Skeleton className="h-4 w-28 bg-white/20" />
+          <Skeleton className="h-10 w-16 bg-white/20" />
+          <Skeleton className="h-3 w-20 bg-white/20" />
+        </div>
+        <Skeleton className="h-12 w-12 rounded-lg bg-white/20" />
+      </div>
+    </div>
   )
+}
 
-  const loading = projectsLoading || surveysLoading || installationsLoading || inspectionsLoading
+function FeasibilityCardSkeleton() {
+  return (
+    <div className="rounded-xl bg-white border border-border p-6 shadow-sm">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 space-y-3">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-10 w-16" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+        <Skeleton className="h-12 w-12 rounded-lg" />
+      </div>
+    </div>
+  )
+}
+
+function ListItemSkeleton() {
+  return (
+    <div className="flex items-start gap-4 rounded-lg border border-border p-4">
+      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-3 w-56" />
+        <div className="flex items-center gap-2 pt-1">
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ListCardSkeleton({ title }: { title: string }) {
+  return (
+    <Card className="border-border bg-card shadow-sm">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg font-semibold text-foreground">{title}</CardTitle>
+          <Skeleton className="h-8 w-16 rounded-md" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <ListItemSkeleton />
+          <ListItemSkeleton />
+          <ListItemSkeleton />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function DashboardSkeleton() {
+  return (
+    <>
+      <div className="mb-6 sm:mb-8 overflow-x-auto pb-2 sm:overflow-visible sm:pb-0">
+        <div className="flex min-w-max gap-4 sm:gap-6 sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+          <div className="w-[280px] shrink-0 sm:w-auto sm:shrink">
+            <StatCardSkeleton />
+          </div>
+          <div className="w-[280px] shrink-0 sm:w-auto sm:shrink">
+            <StatCardSkeleton />
+          </div>
+          <div className="w-[280px] shrink-0 sm:w-auto sm:shrink">
+            <StatCardSkeleton />
+          </div>
+          <div className="w-[280px] shrink-0 sm:w-auto sm:shrink">
+            <StatCardSkeleton />
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6 sm:mb-8">
+        <Skeleton className="h-6 w-56 mb-4" />
+              <div className="overflow-x-auto pb-2 sm:overflow-visible sm:pb-0">
+                <div className="flex min-w-max gap-4 sm:gap-6 sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="w-[280px] shrink-0 sm:w-auto sm:shrink">
+                    <FeasibilityCardSkeleton />
+                  </div>
+                  <div className="w-[280px] shrink-0 sm:w-auto sm:shrink">
+                    <FeasibilityCardSkeleton />
+                  </div>
+                  <div className="w-[280px] shrink-0 sm:w-auto sm:shrink">
+                    <FeasibilityCardSkeleton />
+                  </div>
+                  <div className="w-[280px] shrink-0 sm:w-auto sm:shrink">
+                    <FeasibilityCardSkeleton />
+                  </div>
+                </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 lg:grid-cols-2">
+        <ListCardSkeleton title="Recent Surveys" />
+        <ListCardSkeleton title="Active Installations" />
+      </div>
+
+      <div className="mt-6">
+        <ListCardSkeleton title="Pending Inspections" />
+      </div>
+    </>
+  )
+}
+
+export default function DashboardPage() {
+  const { data: dashboard, loading, error } = useDashboard()
+
+  const stats = dashboard ? {
+    totalProjects: dashboard.totalProjects,
+    pendingSurveys: dashboard.pendingSurveys,
+    activeInstallations: dashboard.activeInstallations,
+    completedThisMonth: dashboard.completedThisMonth,
+    totalSurveys: dashboard.totalSurveys,
+    feasible: dashboard.feasibleSurveys,
+    notFeasible: dashboard.notFeasibleSurveys,
+    pendingAssessment: dashboard.pendingAssessment,
+  } : null
+
+  const recentSurveys = dashboard?.recentSurveys ?? []
+  const displayInstallations = dashboard?.recentInstallations ?? []
+  const pendingInspections = dashboard?.pendingInspections ?? []
 
   return (
     <div className="min-h-screen">
@@ -72,57 +164,66 @@ export default function DashboardPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <DashboardSkeleton />
+        ) : !stats ? (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Could not load dashboard data. Please refresh.
           </div>
         ) : (
           <>
-            <div className="mb-6 sm:mb-8 grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl bg-gradient-dark-green p-6 shadow-lg transition-transform hover:scale-105">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-white/80">Total Projects</p>
-                    <h3 className="mt-3 text-4xl font-bold text-white">{stats.totalProjects}</h3>
-                    <p className="mt-2 text-xs text-green-100">All projects</p>
-                  </div>
-                  <div className="rounded-lg bg-background/20 p-3">
-                    <TrendingUp className="h-6 w-6 text-white" />
+            {error ? (
+              <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                Could not refresh some dashboard data. Showing last available values.
+              </div>
+            ) : null}
+            <div className="mb-6 sm:mb-8 overflow-x-auto pb-2 sm:overflow-visible sm:pb-0">
+              <div className="flex min-w-max gap-4 sm:gap-6 sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+                <div className="w-[280px] shrink-0 rounded-xl bg-gradient-dark-green p-6 shadow-lg transition-transform hover:scale-105 sm:w-auto sm:shrink">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-white/80">Total Projects</p>
+                      <h3 className="mt-3 text-4xl font-bold text-white">{stats.totalProjects}</h3>
+                      <p className="mt-2 text-xs text-green-100">Project PROJ-003</p>
+                    </div>
+                    <div className="rounded-lg bg-background/20 p-3">
+                      <TrendingUp className="h-6 w-6 text-white" />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="rounded-xl bg-gradient-dark-green p-6 shadow-lg transition-transform hover:scale-105">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-white/80">Pending Surveys</p>
-                    <h3 className="mt-3 text-4xl font-bold text-white">{stats.pendingSurveys}</h3>
-                    <p className="mt-2 text-xs text-green-100">Awaiting approval</p>
-                  </div>
-                  <div className="rounded-lg bg-background/20 p-3">
-                    <MapPin className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </div>
-              <div className="rounded-xl bg-gradient-dark-green p-6 shadow-lg transition-transform hover:scale-105">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-white/80">Active Installations</p>
-                    <h3 className="mt-3 text-4xl font-bold text-white">{stats.activeInstallations}</h3>
-                    <p className="mt-2 text-xs text-green-100">In progress</p>
-                  </div>
-                  <div className="rounded-lg bg-background/20 p-3">
-                    <Wrench className="h-6 w-6 text-white" />
+                <div className="w-[280px] shrink-0 rounded-xl bg-gradient-dark-green p-6 shadow-lg transition-transform hover:scale-105 sm:w-auto sm:shrink">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-white/80">Pending Surveys</p>
+                      <h3 className="mt-3 text-4xl font-bold text-white">{stats.pendingSurveys}</h3>
+                      <p className="mt-2 text-xs text-green-100">Awaiting approval</p>
+                    </div>
+                    <div className="rounded-lg bg-background/20 p-3">
+                      <MapPin className="h-6 w-6 text-white" />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="rounded-xl bg-gradient-dark-green p-6 shadow-lg transition-transform hover:scale-105">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-white/80">Completed</p>
-                    <h3 className="mt-3 text-4xl font-bold text-white">{stats.completedThisMonth}</h3>
-                    <p className="mt-2 text-xs text-green-100">This month</p>
+                <div className="w-[280px] shrink-0 rounded-xl bg-gradient-dark-green p-6 shadow-lg transition-transform hover:scale-105 sm:w-auto sm:shrink">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-white/80">Active Installations</p>
+                      <h3 className="mt-3 text-4xl font-bold text-white">{stats.activeInstallations}</h3>
+                      <p className="mt-2 text-xs text-green-100">In progress</p>
+                    </div>
+                    <div className="rounded-lg bg-background/20 p-3">
+                      <Wrench className="h-6 w-6 text-white" />
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-background/20 p-3">
-                    <CheckCircle className="h-6 w-6 text-white" />
+                </div>
+                <div className="w-[280px] shrink-0 rounded-xl bg-gradient-dark-green p-6 shadow-lg transition-transform hover:scale-105 sm:w-auto sm:shrink">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-white/80">Completed</p>
+                      <h3 className="mt-3 text-4xl font-bold text-white">{stats.completedThisMonth}</h3>
+                      <p className="mt-2 text-xs text-green-100">This month</p>
+                    </div>
+                    <div className="rounded-lg bg-background/20 p-3">
+                      <CheckCircle className="h-6 w-6 text-white" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -131,56 +232,58 @@ export default function DashboardPage() {
             {/* Feasibility KPIs */}
             <div className="mb-6 sm:mb-8">
               <h2 className="text-lg font-semibold text-foreground mb-4">Survey Feasibility Overview</h2>
-              <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-muted-foreground">Total Surveys</p>
-                      <h3 className="mt-3 text-4xl font-bold text-foreground">{stats.totalSurveys}</h3>
-                      <p className="mt-2 text-xs text-muted-foreground">All site surveys</p>
-                    </div>
-                    <div className="rounded-lg bg-blue-50 p-3">
-                      <ClipboardList className="h-6 w-6 text-blue-600" />
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-muted-foreground">Feasible</p>
-                      <h3 className="mt-3 text-4xl font-bold text-green-700">{stats.feasible}</h3>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {stats.totalSurveys > 0 ? `${Math.round((stats.feasible / stats.totalSurveys) * 100)}%` : "0%"} of total
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-green-50 p-3">
-                      <ThumbsUp className="h-6 w-6 text-green-600" />
+              <div className="overflow-x-auto pb-2 sm:overflow-visible sm:pb-0">
+                <div className="flex min-w-max gap-4 sm:gap-6 sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="w-[280px] shrink-0 rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105 sm:w-auto sm:shrink">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-muted-foreground">Total Surveys</p>
+                        <h3 className="mt-3 text-4xl font-bold text-foreground">{stats.totalSurveys}</h3>
+                        <p className="mt-2 text-xs text-muted-foreground">PROJ-003 only</p>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 p-3">
+                        <ClipboardList className="h-6 w-6 text-blue-600" />
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-muted-foreground">Not Feasible</p>
-                      <h3 className="mt-3 text-4xl font-bold text-red-700">{stats.notFeasible}</h3>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {stats.totalSurveys > 0 ? `${Math.round((stats.notFeasible / stats.totalSurveys) * 100)}%` : "0%"} of total
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-red-50 p-3">
-                      <ThumbsDown className="h-6 w-6 text-red-600" />
+                  <div className="w-[280px] shrink-0 rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105 sm:w-auto sm:shrink">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-muted-foreground">Feasible</p>
+                        <h3 className="mt-3 text-4xl font-bold text-green-700">{stats.feasible}</h3>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {stats.totalSurveys > 0 ? `${Math.round((stats.feasible / stats.totalSurveys) * 100)}%` : "0%"} of total
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-green-50 p-3">
+                        <ThumbsUp className="h-6 w-6 text-green-600" />
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-muted-foreground">Pending Assessment</p>
-                      <h3 className="mt-3 text-4xl font-bold text-amber-700">{stats.pendingAssessment}</h3>
-                      <p className="mt-2 text-xs text-muted-foreground">Awaiting feasibility check</p>
+                  <div className="w-[280px] shrink-0 rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105 sm:w-auto sm:shrink">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-muted-foreground">Not Feasible</p>
+                        <h3 className="mt-3 text-4xl font-bold text-red-700">{stats.notFeasible}</h3>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {stats.totalSurveys > 0 ? `${Math.round((stats.notFeasible / stats.totalSurveys) * 100)}%` : "0%"} of total
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-red-50 p-3">
+                        <ThumbsDown className="h-6 w-6 text-red-600" />
+                      </div>
                     </div>
-                    <div className="rounded-lg bg-amber-50 p-3">
-                      <AlertCircle className="h-6 w-6 text-amber-600" />
+                  </div>
+                  <div className="w-[280px] shrink-0 rounded-xl bg-white border border-border p-6 shadow-sm transition-transform hover:scale-105 sm:w-auto sm:shrink">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-muted-foreground">Pending Assessment</p>
+                        <h3 className="mt-3 text-4xl font-bold text-amber-700">{stats.pendingAssessment}</h3>
+                        <p className="mt-2 text-xs text-muted-foreground">Awaiting feasibility check</p>
+                      </div>
+                      <div className="rounded-lg bg-amber-50 p-3">
+                        <AlertCircle className="h-6 w-6 text-amber-600" />
+                      </div>
                     </div>
                   </div>
                 </div>

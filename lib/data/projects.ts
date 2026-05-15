@@ -1,41 +1,45 @@
 /**
- * Unified data layer: Supabase when configured, else localStorage store.
- * All functions are async so the app can use the same API in both modes.
+ * Project data from Supabase only.
  */
-import { isSupabaseConfigured } from '@/lib/supabase/config'
-import * as store from '@/lib/store/projects'
+import { assertSupabaseConfigured } from '@/lib/supabase/config'
 import * as supabase from '@/lib/supabase/projects'
 import type { Project, CreateProjectInput, UpdateProjectInput, ProjectAssignments } from '@/lib/store/projects'
 
 export type { Project, CreateProjectInput, UpdateProjectInput, ProjectAssignments }
 
+let listProjectsInflight: Promise<Project[]> | null = null
+
 export async function listProjects(): Promise<Project[]> {
-  if (isSupabaseConfigured()) return supabase.listProjectsFromSupabase()
-  return Promise.resolve(store.listProjects())
+  assertSupabaseConfigured()
+  if (!listProjectsInflight) {
+    listProjectsInflight = supabase.listProjectsFromSupabase().finally(() => {
+      listProjectsInflight = null
+    })
+  }
+  return listProjectsInflight
 }
 
 export async function getProjectById(id: string): Promise<Project | undefined> {
-  if (isSupabaseConfigured()) return supabase.getProjectByIdFromSupabase(id)
-  return Promise.resolve(store.getProjectById(id))
+  assertSupabaseConfigured()
+  return supabase.getProjectByIdFromSupabase(id)
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  if (isSupabaseConfigured()) return supabase.createProjectInSupabase(input)
-  return Promise.resolve(store.createProject(input))
+  assertSupabaseConfigured()
+  return supabase.createProjectInSupabase(input)
 }
 
 export async function updateProject(projectId: string, input: UpdateProjectInput): Promise<Project> {
-  if (isSupabaseConfigured()) return supabase.updateProjectInSupabase(projectId, input)
-  return Promise.resolve(store.updateProject(projectId, input))
+  assertSupabaseConfigured()
+  return supabase.updateProjectInSupabase(projectId, input)
 }
 
 export async function updateProjectAssignments(projectId: string, assignments: ProjectAssignments): Promise<Project> {
-  if (isSupabaseConfigured()) return supabase.updateProjectAssignmentsInSupabase(projectId, assignments)
-  return Promise.resolve(store.updateProjectAssignments(projectId, assignments))
+  assertSupabaseConfigured()
+  return supabase.updateProjectAssignmentsInSupabase(projectId, assignments)
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
-  if (isSupabaseConfigured()) return supabase.deleteProjectInSupabase(projectId)
-  store.deleteProject(projectId)
-  return Promise.resolve()
+  assertSupabaseConfigured()
+  return supabase.deleteProjectInSupabase(projectId)
 }

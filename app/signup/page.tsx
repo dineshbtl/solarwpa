@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
@@ -9,21 +9,40 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card } from "@/components/ui/card"
+import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/hooks/use-toast"
+import { normalizeLoginEmail } from "@/lib/auth-login"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import type { Database } from "@/lib/supabase/database.types"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
+import { isSupabaseConfigured } from "@/lib/supabase/config"
 
-function useSupabaseAuth() {
-  if (typeof window === "undefined") return null
-  try {
+function useDeferredSupabaseClient(): {
+  client: SupabaseClient<Database> | null
+  authReady: boolean
+} {
+  const [client, setClient] = useState<SupabaseClient<Database> | null>(null)
+  const [authReady, setAuthReady] = useState(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    if (url && key) {
-      const { getSupabaseBrowserClient } = require("@/lib/supabase/client")
-      return getSupabaseBrowserClient()
+    return !(url && key)
+  })
+  useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !key) {
+      setAuthReady(true)
+      return
     }
-  } catch {
-    // env not set or client not available
-  }
-  return null
+    try {
+      setClient(getSupabaseBrowserClient())
+    } catch (e) {
+      console.warn("[signup] Supabase browser client failed to initialize", e)
+    } finally {
+      setAuthReady(true)
+    }
+  }, [])
+  return { client, authReady }
 }
 
 export default function SignUpPage() {
@@ -33,10 +52,12 @@ export default function SignUpPage() {
   const [name, setName] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const supabase = useSupabaseAuth()
+  const { client: supabase, authReady } = useDeferredSupabaseClient()
+  const supabaseConfigured = isSupabaseConfigured()
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (supabaseConfigured && !authReady) return
     if (!supabase) {
       toast({ title: "Sign up not configured", description: "Set Supabase env vars for auth.", variant: "destructive" })
       return
@@ -44,7 +65,7 @@ export default function SignUpPage() {
     setLoading(true)
     try {
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: normalizeLoginEmail(email),
         password,
         options: { data: { full_name: name.trim() || undefined } },
       })
@@ -141,10 +162,15 @@ export default function SignUpPage() {
           </div>
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || (supabaseConfigured && !authReady)}
             className="w-full bg-gradient-dark-green hover:opacity-90 text-white py-6 rounded-xl font-semibold"
           >
-            {loading ? "Creating account…" : "Sign up"}
+            {loading && <Spinner className="mr-2" />}
+            {supabaseConfigured && !authReady
+              ? "Preparing sign-up…"
+              : loading
+                ? "Creating account…"
+                : "Sign up"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             Already have an account? <Link href="/" className="text-green-600 hover:underline font-medium">Sign in</Link>

@@ -4,8 +4,10 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { ArrowLeft, Save, Loader2 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
+import { useFormDraft } from "@/lib/store/use-form-draft"
+import { DraftBanner } from "@/components/draft-banner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,16 +21,10 @@ import { createProject } from "@/lib/data/projects"
 import { useUsers } from "@/lib/data/hooks"
 import { siteLocationOptions } from "@/lib/data/site-location-options"
 import { LocationAutocomplete } from "@/components/location-autocomplete"
-import { seedUsers } from "@/lib/data/users"
-import { useEffect } from "react"
 
 export default function NewProjectPage() {
   const router = useRouter()
-  const { data: users = [], refetch: refetchUsers } = useUsers()
-
-  useEffect(() => {
-    seedUsers().then(() => refetchUsers())
-  }, [refetchUsers])
+  const { data: users = [] } = useUsers()
 
   const managers = useMemo(() => users.filter((u) => u.role === "manager" || u.role === "admin"), [users])
 
@@ -50,10 +46,38 @@ export default function NewProjectPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const watchedValues = form.watch()
+  const projectDraft = useFormDraft<CreateProjectInput>("projects.new", watchedValues)
+  const [draftBannerOpen, setDraftBannerOpen] = useState(false)
+  const [draftBannerSavedAt, setDraftBannerSavedAt] = useState<string | null>(null)
+  const draftCheckedRef = useRef(false)
+
+  useEffect(() => {
+    if (draftCheckedRef.current) return
+    draftCheckedRef.current = true
+    if (projectDraft.hasDraft()) {
+      setDraftBannerSavedAt(projectDraft.peekSavedAt())
+      setDraftBannerOpen(true)
+    }
+  }, [projectDraft])
+
+  const handleRestoreDraft = () => {
+    const d = projectDraft.restore()
+    if (d) form.reset(d)
+    setDraftBannerOpen(false)
+    toast({ title: "Draft restored" })
+  }
+
+  const handleDiscardDraft = () => {
+    projectDraft.clear()
+    setDraftBannerOpen(false)
+  }
+
   const onSubmit = async (values: CreateProjectInput) => {
     setIsSubmitting(true)
     try {
       const p = await createProject(values)
+      projectDraft.clear()
       toast({
         title: "Project created",
         description: `${p.projectName} (${p.id})`,
@@ -87,6 +111,17 @@ export default function NewProjectPage() {
           </Button>
         </Link>
       </div>
+
+      {draftBannerOpen ? (
+        <div className="mb-4 max-w-3xl">
+          <DraftBanner
+            savedAt={draftBannerSavedAt}
+            onRestore={handleRestoreDraft}
+            onDiscard={handleDiscardDraft}
+            hint=""
+          />
+        </div>
+      ) : null}
 
       <Card className="max-w-3xl border-border bg-card shadow-sm rounded-xl">
         <CardHeader>

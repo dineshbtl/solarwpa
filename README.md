@@ -32,6 +32,9 @@ Open [http://localhost:3000](http://localhost:3000).
 - **Supabase / env**  
   Copy `.env.example` to `.env.local` and set at least `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (see `.env.example` comments). Server-side code also needs `NEXT_PUBLIC_SUPABASE_URL` set.
 
+- **Ports (Kong vs Next.js)**  
+  Default Supabase Kong is **8000**; Studio often uses **3000**. If something else uses 8000, set `KONG_HTTP_PORT` in `supabase/docker/.env` (e.g. **7100**) and point `.env.local` at that port. Production PM2 uses **PORT=6001** ([`ecosystem.config.cjs`](ecosystem.config.cjs)). Optional: `npm run dev:7100` to run Next on 7100 locally. See [`docs/CONNECTION_TROUBLESHOOTING.md`](docs/CONNECTION_TROUBLESHOOTING.md) §7.
+
 ## Scripts
 
 | Script        | Description                    |

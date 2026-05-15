@@ -3,6 +3,7 @@
  * Survey file uploads are stored in Supabase Storage (bucket: solar_bucket).
  */
 import type { Database } from '@/lib/supabase/database.types'
+import { ACTIVE_PROJECT_ID } from '@/lib/data/active-project'
 import type {
   Survey,
   CreateSurveyInput,
@@ -10,7 +11,16 @@ import type {
   FileMeta,
   SurveyActivityEvent,
 } from '@/lib/store/surveys'
+import type { InstallationStatus } from '@/lib/store/installations'
+import type { Role } from '@/lib/rbac'
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
+
+// Bypass Supabase v2 complex generic type inference to prevent `never` types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function q(client: any): { from: (table: string) => any } {
+  return client as unknown as { from: (table: string) => any }
+}
+
 
 const SURVEY_UPLOADS_BUCKET = 'solar_bucket'
 
@@ -77,6 +87,78 @@ export async function ensureUploadUrls(
 
 type SurveyRow = Database['public']['Tables']['surveys']['Row']
 
+const INSTALLATION_STATUSES: ReadonlySet<string> = new Set([
+  'pending',
+  'in_progress',
+  'completed',
+  'inspection_pending',
+])
+
+/** PostgREST / Postgres: assignment list view not migrated yet. */
+function isMissingSurveysAssignmentViewError(error: unknown): boolean {
+  const e = error as { message?: string; code?: string; details?: string; hint?: string }
+  const msg = `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''}`.toLowerCase()
+  const code = e.code ?? ''
+  if (code === 'PGRST205' || code === '42P01') return true
+  if (msg.includes('surveys_with_latest_installation')) return true
+  if (msg.includes('could not find') && (msg.includes('schema cache') || msg.includes('relation'))) return true
+  return false
+}
+
+/** When the DB view is absent, attach latest installation per survey (same semantics as the view). */
+async function mergeLatestInstallationsIntoSurveys(
+  supabase: ReturnType<typeof getSupabaseBrowserClient>,
+  items: Survey[],
+): Promise<Survey[]> {
+  const ids = items.map((s) => s.id).filter(Boolean)
+  if (ids.length === 0) return items
+  const { data, error } = await q(supabase)
+    .from('installations')
+    .select('id, survey_id, status, created_at')
+    .in('survey_id', ids)
+  if (error) throw error
+  type InstRow = { id: string; survey_id: string | null; status: string | null; created_at: string | null }
+  const bestBySurvey = new Map<string, InstRow>()
+  for (const r of (data ?? []) as InstRow[]) {
+    if (!r.survey_id) continue
+    const prev = bestBySurvey.get(r.survey_id)
+    if (!prev) {
+      bestBySurvey.set(r.survey_id, r)
+      continue
+    }
+    const tNew = r.created_at ?? ''
+    const tOld = prev.created_at ?? ''
+    if (tNew > tOld || (tNew === tOld && (r.id ?? '') > (prev.id ?? ''))) {
+      bestBySurvey.set(r.survey_id, r)
+    }
+  }
+  return items.map((s) => {
+    const li = bestBySurvey.get(s.id)
+    if (!li) return s
+    const rawInst = li.status
+    const installationStatus =
+      typeof rawInst === 'string' && INSTALLATION_STATUSES.has(rawInst)
+        ? (rawInst as InstallationStatus)
+        : undefined
+    return { ...s, installationId: li.id, installationStatus }
+  })
+}
+
+function assignmentViewRowToSurvey(row: unknown): Survey {
+  const r = row as Record<string, unknown>
+  const installationId =
+    typeof r.installation_id === 'string' && r.installation_id.length > 0 ? r.installation_id : undefined
+  const rawInst = r.installation_status
+  const installationStatus =
+    typeof rawInst === 'string' && INSTALLATION_STATUSES.has(rawInst)
+      ? (rawInst as InstallationStatus)
+      : undefined
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { installation_id: _iid, installation_status: _ist, ...rest } = r
+  const base = rowToSurvey(rest as SurveyRow)
+  return { ...base, installationId, installationStatus }
+}
+
 function rowToSurvey(row: SurveyRow): Survey {
   const siteLocation = (row.site_location ?? {}) as Record<string, string>
   const bankDetails = (row.bank_details ?? {}) as Record<string, string>
@@ -100,7 +182,7 @@ function rowToSurvey(row: SurveyRow): Survey {
     submittedAt: row.submitted_at,
     installerId: row.installer_id ?? undefined,
     discomName: row.discom_name,
-    plantType: row.plant_type,
+    plantType: row.plant_type as Survey['plantType'],
     buildingHeight: Number(row.building_height ?? 0),
     totalRoofs: row.total_roofs,
     roofType: row.roof_type,
@@ -120,8 +202,8 @@ function rowToSurvey(row: SurveyRow): Survey {
       latitude: siteLocation?.latitude,
       longitude: siteLocation?.longitude,
       electricityConsumerNo: siteLocation?.electricityConsumerNo ?? siteLocation?.electricity_consumer_no,
-      connectionType: siteLocation?.connectionType ?? siteLocation?.connection_type,
-      phase: siteLocation?.phase,
+      connectionType: (siteLocation?.connectionType ?? siteLocation?.connection_type) as Survey['siteLocation']['connectionType'],
+      phase: siteLocation?.phase as Survey['siteLocation']['phase'],
       sanctionedLoadKw: siteLocation?.sanctionedLoadKw ?? siteLocation?.sanctioned_load_kw,
       avgMonthlyBillRupees: siteLocation?.avgMonthlyBillRupees ?? siteLocation?.avg_monthly_bill_rupees,
     },
@@ -138,9 +220,10 @@ function rowToSurvey(row: SurveyRow): Survey {
   }
 }
 
-export async function listSurveysFromSupabase(): Promise<Survey[]> {
+/** Full table scan for ID generation and duplicate checks on create/update only. */
+async function loadAllSurveysForMutations(): Promise<Survey[]> {
   const supabase = getSupabaseBrowserClient()
-  const { data, error } = await supabase.from('surveys').select('*').order('created_at', { ascending: false })
+  const { data, error } = await q(supabase).from('surveys').select('*').order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []).map(rowToSurvey)
 }
@@ -150,6 +233,56 @@ function escapeIlike(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
 }
 
+export async function listSurveysFromSupabase(): Promise<Survey[]> {
+  const supabase = getSupabaseBrowserClient()
+  const scoped = await q(supabase)
+    .from('surveys')
+    .select('*')
+    .eq('project_id', ACTIVE_PROJECT_ID)
+    .order('created_at', { ascending: false })
+  if (scoped.error) throw scoped.error
+  if ((scoped.data ?? []).length > 0) return (scoped.data ?? []).map(rowToSurvey)
+
+  // Fallback for legacy deployments where survey rows may not be project-scoped.
+  const { data, error } = await q(supabase).from('surveys').select('*').order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map(rowToSurvey)
+}
+
+/** Case-insensitive exact match; escapes ILIKE wildcards in user input. */
+export async function isServiceNoTakenGlobally(
+  serviceNo: string,
+  excludeSurveyId?: string
+): Promise<boolean> {
+  const term = serviceNo.trim()
+  if (!term) return false
+  const pattern = escapeIlike(term)
+  const supabase = getSupabaseBrowserClient()
+  const { data, error } = await q(supabase).from('surveys').select('id').ilike('service_no', pattern)
+  if (error) throw error
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).some((r: any) => r.id !== excludeSurveyId)
+}
+
+export async function isAadharTakenGlobally(aadhar: string, excludeSurveyId?: string): Promise<boolean> {
+  const v = aadhar.trim()
+  if (!v) return false
+  const supabase = getSupabaseBrowserClient()
+  const { data, error } = await q(supabase).from('surveys').select('id').eq('aadhar_no', v)
+  if (error) throw error
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).some((r: any) => r.id !== excludeSurveyId)
+}
+
+/** Sentinel: surveys with no installer assigned (stored as this string in queries). */
+export const SURVEYS_INSTALLER_FILTER_UNASSIGNED = '__unassigned__' as const
+
+/** Sentinel: assignment list — household has no installation row yet. */
+export const SURVEYS_INSTALLATION_FILTER_NONE = '__no_installation__' as const
+
+/** Sentinel: assignment list — household has any installation row (i.e. installation started). */
+export const SURVEYS_INSTALLATION_FILTER_ANY = '__has_installation__' as const
+
 export type ListSurveysPaginatedParams = {
   limit: number
   offset: number
@@ -158,52 +291,130 @@ export type ListSurveysPaginatedParams = {
   subDivision?: string
   status?: string
   feasibility?: string
+  /** '' or omit = all surveys; SURVEYS_INSTALLER_FILTER_UNASSIGNED = no installer; else profile id USR-* */
+  installerFilter?: string
+  /** Default `surveys` table; `assignment` uses `surveys_with_latest_installation` view. */
+  listSource?: 'surveys' | 'assignment'
+  /** When listSource is assignment: filter by latest installation status, or SURVEYS_INSTALLATION_FILTER_NONE. */
+  installationStatus?: string
 }
 
 export async function listSurveysFromSupabasePaginated(
   params: ListSurveysPaginatedParams
 ): Promise<{ items: Survey[]; total: number }> {
-  const { limit, offset, search, section, subDivision, status, feasibility } = params
+  const {
+    limit,
+    offset,
+    search,
+    section,
+    subDivision,
+    status,
+    feasibility,
+    installerFilter,
+    listSource = 'surveys',
+    installationStatus,
+  } = params
   const supabase = getSupabaseBrowserClient()
-  let query = supabase
-    .from('surveys')
-    .select('*', { count: 'exact', head: false })
-    .order('created_at', { ascending: false })
 
-  if (search && search.trim()) {
-    const term = escapeIlike(search.trim())
-    const pattern = `%${term}%`
-    query = query.or(
-      `beneficiary_name.ilike.${pattern},service_no.ilike.${pattern},id.ilike.${pattern},aadhar_no.ilike.${pattern},pan_no.ilike.${pattern},mobile.ilike.${pattern}`
-    )
-  }
+  const buildQuery = (scopeToActiveProject: boolean, fromTable: string, applyInstallationFilters: boolean) => {
+    let query = q(supabase)
+      .from(fromTable)
+      .select('*', { count: 'exact', head: false })
+      .order('created_at', { ascending: false })
+    if (scopeToActiveProject) query = query.eq('project_id', ACTIVE_PROJECT_ID)
 
-  if (section?.trim()) {
-    query = query.filter('site_location->>section', 'eq', section.trim())
-  }
-  if (subDivision?.trim()) {
-    query = query.filter('site_location->>subDivision', 'eq', subDivision.trim())
-  }
-  if (status?.trim()) {
-    query = query.eq('status', status.trim())
-  }
-  if (feasibility?.trim()) {
-    if (feasibility === 'pending') {
-      query = query.or('site_details->>overallFeasibility.is.null,site_details.is.null')
-    } else {
-      query = query.filter('site_details->>overallFeasibility', 'eq', feasibility.trim())
+    const inst = (installerFilter ?? '').trim()
+    if (inst === SURVEYS_INSTALLER_FILTER_UNASSIGNED) {
+      query = query.is('installer_id', null)
+    } else if (inst) {
+      query = query.eq('installer_id', inst)
     }
+
+    if (listSource === 'assignment' && applyInstallationFilters) {
+      const isf = (installationStatus ?? '').trim()
+      if (isf === SURVEYS_INSTALLATION_FILTER_NONE) {
+        query = query.is('installation_id', null)
+      } else if (isf === SURVEYS_INSTALLATION_FILTER_ANY) {
+        query = query.not('installation_id', 'is', null)
+      } else if (isf) {
+        query = query.eq('installation_status', isf)
+      }
+    }
+
+    if (search && search.trim()) {
+      const term = escapeIlike(search.trim())
+      const pattern = `%${term}%`
+      query = query.or(
+        `beneficiary_name.ilike.${pattern},service_no.ilike.${pattern},id.ilike.${pattern},aadhar_no.ilike.${pattern},pan_no.ilike.${pattern},mobile.ilike.${pattern},site_location->>electricityConsumerNo.ilike.${pattern},site_location->>electricity_consumer_no.ilike.${pattern}`
+      )
+    }
+
+    if (section?.trim()) {
+      query = query.filter('site_location->>section', 'eq', section.trim())
+    }
+    if (subDivision?.trim()) {
+      query = query.filter('site_location->>subDivision', 'eq', subDivision.trim())
+    }
+    if (status?.trim()) {
+      query = query.eq('status', status.trim())
+    }
+    if (feasibility?.trim()) {
+      if (feasibility === 'pending') {
+        query = query.or('site_details->>overallFeasibility.is.null,site_details.is.null')
+      } else {
+        query = query.filter('site_details->>overallFeasibility', 'eq', feasibility.trim())
+      }
+    }
+    return query
   }
 
-  const { data, error, count } = await query.range(offset, offset + limit - 1)
+  const mapRows = (fromTable: string, rows: unknown[]): Survey[] =>
+    fromTable === 'surveys_with_latest_installation'
+      ? rows.map((row) => assignmentViewRowToSurvey(row))
+      : rows.map((row) => rowToSurvey(row as SurveyRow))
+
+  let fromTable = listSource === 'assignment' ? 'surveys_with_latest_installation' : 'surveys'
+  let applyInstallationFilters = listSource === 'assignment'
+  let enrichInstallations = false
+
+  let scopedResult = await buildQuery(true, fromTable, applyInstallationFilters).range(offset, offset + limit - 1)
+  if (
+    scopedResult.error &&
+    listSource === 'assignment' &&
+    isMissingSurveysAssignmentViewError(scopedResult.error)
+  ) {
+    if ((installationStatus ?? '').trim()) {
+      throw new Error(
+        'Installation status filtering requires the surveys_with_latest_installation view. Apply database migration 00028_surveys_with_latest_installation.sql, then refresh.',
+      )
+    }
+    fromTable = 'surveys'
+    applyInstallationFilters = false
+    enrichInstallations = true
+    scopedResult = await buildQuery(true, fromTable, applyInstallationFilters).range(offset, offset + limit - 1)
+  }
+  if (scopedResult.error) throw scopedResult.error
+
+  let scopedItems = mapRows(fromTable, scopedResult.data ?? [])
+  if (enrichInstallations) scopedItems = await mergeLatestInstallationsIntoSurveys(supabase, scopedItems)
+  if ((scopedResult.count ?? 0) > 0 || scopedItems.length > 0 || Boolean(search?.trim())) {
+    return { items: scopedItems, total: scopedResult.count ?? scopedItems.length }
+  }
+
+  // Fallback for legacy deployments where survey rows may not be project-scoped.
+  const { data, error, count } = await buildQuery(false, fromTable, applyInstallationFilters).range(
+    offset,
+    offset + limit - 1,
+  )
   if (error) throw error
-  const items = (data ?? []).map(rowToSurvey)
+  let items = mapRows(fromTable, data ?? [])
+  if (enrichInstallations) items = await mergeLatestInstallationsIntoSurveys(supabase, items)
   return { items, total: count ?? items.length }
 }
 
 export async function getSurveyByIdFromSupabase(id: string): Promise<Survey | undefined> {
   const supabase = getSupabaseBrowserClient()
-  const { data, error } = await supabase.from('surveys').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await q(supabase).from('surveys').select('*').eq('id', id).maybeSingle()
   if (error) throw error
   return data ? rowToSurvey(data) : undefined
 }
@@ -222,7 +433,7 @@ export async function createSurveyInSupabase(
   uploadFiles?: Partial<Record<SurveyUploadKeys, File>>
 ): Promise<Survey> {
   const supabase = getSupabaseBrowserClient()
-  const existing = await listSurveysFromSupabase()
+  const existing = await loadAllSurveysForMutations()
   const serviceNoNorm = input.serviceNo.trim().toLowerCase()
   const duplicate = existing.find((s) => (s.serviceNo ?? '').trim().toLowerCase() === serviceNoNorm)
   if (duplicate) throw new Error('Service number is already used by another survey. Please use a unique service number.')
@@ -234,6 +445,7 @@ export async function createSurveyInSupabase(
   const bankEmpty = !bank?.bankName?.trim() && !bank?.accountNo?.trim() && !bank?.ifsc?.trim()
   const row = {
     id,
+    project_id: input.projectId ?? ACTIVE_PROJECT_ID,
     beneficiary_name: input.beneficiaryName,
     service_no: input.serviceNo,
     aadhar_no: input.aadharNo,
@@ -262,9 +474,10 @@ export async function createSurveyInSupabase(
     upload_date: now,
     activity: [{ at: now, actorId: submittedById, action: 'submitted', message: 'Survey submitted' }],
   }
-  const { data, error } = await supabase.from('surveys').insert(row).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').insert(row as any).select().single()
   if (error) throw error
-  return rowToSurvey(data)
+  return rowToSurvey(data as any)
 }
 
 export async function updateSurveyInSupabase(
@@ -276,7 +489,7 @@ export async function updateSurveyInSupabase(
   uploadFiles?: Partial<Record<SurveyUploadKeys, File>>
 ): Promise<Survey> {
   const supabase = getSupabaseBrowserClient()
-  const existing = await listSurveysFromSupabase()
+  const existing = await loadAllSurveysForMutations()
   const serviceNoNorm = input.serviceNo.trim().toLowerCase()
   const duplicate = existing.find((s) => s.id !== id && (s.serviceNo ?? '').trim().toLowerCase() === serviceNoNorm)
   if (duplicate) throw new Error('Service number is already used by another survey. Please use a unique service number.')
@@ -311,41 +524,97 @@ export async function updateSurveyInSupabase(
     submitted_by_id: submittedById ?? null,
     remarks: input.remarks ?? null,
   }
-  const { data: current } = await supabase.from('surveys').select('activity').eq('id', id).single()
-  const activity = [...((current?.activity ?? []) as SurveyActivityEvent[]), { at: now, actorId: submittedById, action: 'edited' as const, message: 'Survey updated' }]
+  const { data: current } = await q(supabase).from('surveys').select('activity').eq('id', id).single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentRow = current as any
+  const activity = [...((currentRow?.activity ?? []) as SurveyActivityEvent[]), { at: now, actorId: submittedById, action: 'edited' as const, message: 'Survey updated' }]
   updates.activity = activity
-  const { data, error } = await supabase.from('surveys').update(updates).eq('id', id).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').update(updates as any).eq('id', id).select().single()
   if (error) throw error
-  return rowToSurvey(data)
+  return rowToSurvey(data as any)
 }
 
 export async function updateSurveyStatusInSupabase(id: string, status: Survey['status']): Promise<Survey> {
   const supabase = getSupabaseBrowserClient()
-  const { data: current, error: fetchErr } = await supabase.from('surveys').select('*').eq('id', id).single()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.id) throw new Error('Unauthorized: sign in required')
+  const { data: actorProfile, error: actorErr } = await q(supabase).from('profiles').select('role').eq('auth_user_id', user.id).maybeSingle()
+  if (actorErr) throw actorErr
+  const actorRole = (actorProfile?.role ?? '') as Role
+  if (!['admin', 'manager', 'supervisor'].includes(actorRole)) {
+    throw new Error('Forbidden: only supervisor/manager/admin can change survey status')
+  }
+
+  const { data: current, error: fetchErr } = await q(supabase).from('surveys').select('*').eq('id', id).single()
   if (fetchErr || !current) throw fetchErr || new Error('Survey not found')
   const now = new Date().toISOString()
-  const activity = [...((current.activity ?? []) as SurveyActivityEvent[]), { at: now, action: 'status_changed', message: `Status changed to ${status}`, meta: { status } }]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentSurvey = current as any
+  const activity = [...((currentSurvey.activity ?? []) as SurveyActivityEvent[]), { at: now, action: 'status_changed', message: `Status changed to ${status}`, meta: { status } }]
   const updates: Record<string, unknown> = { status, activity }
   if (status === 'approved' || status === 'completed') {
-    updates.approved_date = current.approved_date ?? now
+    updates.approved_date = currentSurvey.approved_date ?? now
   }
-  const { data, error } = await supabase.from('surveys').update(updates).eq('id', id).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').update(updates as any).eq('id', id).select().single()
   if (error) throw error
-  return rowToSurvey(data)
+  return rowToSurvey(data as any)
 }
 
 export async function assignSurveyInstallerInSupabase(id: string, installerId?: string): Promise<Survey> {
   const supabase = getSupabaseBrowserClient()
-  const { data: current, error: fetchErr } = await supabase.from('surveys').select('*').eq('id', id).single()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user?.id) throw new Error('Unauthorized: sign in required')
+  const { data: actorProfile, error: actorErr } = await q(supabase).from('profiles').select('role').eq('auth_user_id', user.id).maybeSingle()
+  if (actorErr) throw actorErr
+  const actorRole = (actorProfile?.role ?? '') as Role
+  if (!['admin', 'manager', 'engineer', 'supervisor'].includes(actorRole)) {
+    throw new Error('Forbidden: role cannot assign installer')
+  }
+  if (installerId) {
+    const { data: installerProfile, error: installerErr } = await q(supabase)
+      .from('profiles')
+      .select('role')
+      .eq('id', installerId)
+      .maybeSingle()
+    if (installerErr) throw installerErr
+    if (installerProfile?.role !== 'installer') {
+      throw new Error('Installer assignment requires a user with installer role')
+    }
+  }
+
+  const { data: current, error: fetchErr } = await q(supabase).from('surveys').select('*').eq('id', id).single()
   if (fetchErr || !current) throw fetchErr || new Error('Survey not found')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentSurvey2 = current as any
+  if (currentSurvey2.status === 'completed') {
+    throw new Error('Installer cannot be changed: household survey is completed.')
+  }
+  const { data: instLatest } = await q(supabase)
+    .from('installations')
+    .select('status')
+    .eq('survey_id', id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const latestSt = (instLatest as any[] | null)?.[0]?.status as string | undefined
+  if (latestSt === 'completed') {
+    throw new Error('Installer cannot be changed: installation is completed.')
+  }
   const now = new Date().toISOString()
   const activity = [
-    ...((current.activity ?? []) as SurveyActivityEvent[]),
+    ...((currentSurvey2.activity ?? []) as SurveyActivityEvent[]),
     { at: now, action: 'installer_assigned', message: installerId ? `Installer assigned (${installerId})` : 'Installer unassigned', meta: { installerId: installerId ?? null } },
   ]
-  const { data, error } = await supabase.from('surveys').update({ installer_id: installerId ?? null, activity }).eq('id', id).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').update({ installer_id: installerId ?? null, activity } as any).eq('id', id).select().single()
   if (error) throw error
-  return rowToSurvey(data)
+  return rowToSurvey(data as any)
 }
 
 export async function appendSurveyActivityInSupabase(
@@ -353,17 +622,20 @@ export async function appendSurveyActivityInSupabase(
   event: Omit<SurveyActivityEvent, 'at'> & { at?: string }
 ): Promise<Survey> {
   const supabase = getSupabaseBrowserClient()
-  const { data: current, error: fetchErr } = await supabase.from('surveys').select('activity').eq('id', id).single()
+  const { data: current, error: fetchErr } = await q(supabase).from('surveys').select('activity').eq('id', id).single()
   if (fetchErr || !current) throw fetchErr || new Error('Survey not found')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentSurvey3 = current as any
   const at = event.at ?? new Date().toISOString()
-  const activity = [...((current.activity ?? []) as SurveyActivityEvent[]), { ...event, at }]
-  const { data, error } = await supabase.from('surveys').update({ activity }).eq('id', id).select().single()
+  const activity = [...((currentSurvey3.activity ?? []) as SurveyActivityEvent[]), { ...event, at }]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').update({ activity } as any).eq('id', id).select().single()
   if (error) throw error
-  return rowToSurvey(data)
+  return rowToSurvey(data as any)
 }
 
 export async function deleteSurveyFromSupabase(id: string): Promise<void> {
   const supabase = getSupabaseBrowserClient()
-  const { error } = await supabase.from('surveys').delete().eq('id', id)
+  const { error } = await q(supabase).from('surveys').delete().eq('id', id)
   if (error) throw error
 }

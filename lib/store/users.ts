@@ -19,11 +19,24 @@ export type User = {
   state?: string
   district?: string
   fullAddress?: string
+  assignedLocations?: string[]
 }
 
 const STORAGE_KEY = 'solarepc.users.v1'
 
-const RoleSchema = z.enum(['admin', 'manager', 'engineer', 'surveyor', 'government'])
+const RoleSchema = z.enum([
+  'admin',
+  'manager',
+  'store_manager',
+  'supervisor',
+  'engineer',
+  'installer',
+  'surveyor',
+  'government',
+  'state_store_officer',
+  'district_store_incharge',
+  'village_supervisor',
+])
 const StatusSchema = z.enum(['active', 'inactive'])
 
 export const UserSchema = z.object({
@@ -40,9 +53,22 @@ export const UserSchema = z.object({
   state: z.string().max(80).optional(),
   district: z.string().max(80).optional(),
   fullAddress: z.string().max(500).optional(),
+  assignedLocations: z.array(z.string().max(80)).optional(),
 })
 
-const roleOptions = ['admin', 'manager', 'engineer', 'surveyor', 'government'] as const
+const roleOptions = [
+  'admin',
+  'manager',
+  'store_manager',
+  'supervisor',
+  'engineer',
+  'installer',
+  'surveyor',
+  'government',
+  'state_store_officer',
+  'district_store_incharge',
+  'village_supervisor',
+] as const
 export const CreateUserSchema = z.object({
   name: z.string().min(2, 'Full name must be at least 2 characters').max(80),
   email: z.string().email('Enter a valid email').max(120),
@@ -55,6 +81,7 @@ export const CreateUserSchema = z.object({
   state: z.string().max(80).optional().or(z.literal('')),
   district: z.string().max(80).optional().or(z.literal('')),
   fullAddress: z.string().max(500).optional().or(z.literal('')),
+  assignedLocations: z.array(z.string().max(80)).optional(),
 })
 
 export const UpdateUserSchema = z.object({
@@ -69,6 +96,7 @@ export const UpdateUserSchema = z.object({
   state: z.string().max(80).optional().or(z.literal('')),
   district: z.string().max(80).optional().or(z.literal('')),
   fullAddress: z.string().max(500).optional().or(z.literal('')),
+  assignedLocations: z.array(z.string().max(80)).optional(),
 })
 
 export type CreateUserInput = z.infer<typeof CreateUserSchema>
@@ -90,9 +118,10 @@ export function seedUsers(): User[] {
   const seeded: User[] = [
     { id: 'USR-001', name: 'Admin User', email: 'admin@solarepc.com', role: 'admin', createdAt: nowISO() },
     { id: 'USR-002', name: 'Priya Singh', email: 'priya@solarepc.com', role: 'manager', createdAt: nowISO() },
-    { id: 'USR-003', name: 'Amit Sharma', email: 'amit@solarepc.com', role: 'surveyor', createdAt: nowISO() },
-    { id: 'USR-004', name: 'Rahul Verma', email: 'rahul@solarepc.com', role: 'engineer', createdAt: nowISO() },
-    { id: 'USR-005', name: 'Gov Inspector', email: 'gov@solarepc.com', role: 'government', createdAt: nowISO() },
+    { id: 'USR-003', name: 'Store Manager', email: 'store.manager@solarepc.com', role: 'store_manager', createdAt: nowISO() },
+    { id: 'USR-004', name: 'Site Supervisor', email: 'supervisor@solarepc.com', role: 'supervisor', createdAt: nowISO() },
+    { id: 'USR-005', name: 'Rahul Verma', email: 'rahul@solarepc.com', role: 'engineer', createdAt: nowISO() },
+    { id: 'USR-006', name: 'Installer User', email: 'installer@solarepc.com', role: 'installer', createdAt: nowISO() },
   ]
   writeLocalStorageJSON(STORAGE_KEY, seeded)
   return seeded
@@ -127,7 +156,7 @@ export function createUser(input: CreateUserInput): User {
     name: validated.name,
     email: validated.email,
     password: validated.password,
-    role: validated.role,
+    role: validated.role as Role,
     status: validated.status ?? 'active',
     phone: validated.phone?.trim() || undefined,
     aadharNo: validated.aadharNo?.trim() || undefined,

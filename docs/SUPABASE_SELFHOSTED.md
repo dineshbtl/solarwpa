@@ -119,6 +119,11 @@ await supabase.auth.signInWithPassword({ email, password })
 await supabase.auth.getSession()
 ```
 
+### Session length (JWT and idle sign-out)
+
+- **Next.js idle timeout:** The app signs the user out after a period with no pointer, keyboard, or scroll activity (`components/idle-session-watcher.tsx`). The default is **11 hours**. Set **`NEXT_PUBLIC_IDLE_SESSION_MS`** in `.env.local` to override (value in **milliseconds**, clamped between 1 minute and 7 days). Example for 12 hours: `NEXT_PUBLIC_IDLE_SESSION_MS=43200000`.
+- **Supabase JWT (access token) lifetime:** Short-lived JWTs are normal; the client refreshes the session with the refresh token. To change how long each access token lasts before refresh, adjust **JWT expiry** on **Supabase Cloud** (Dashboard → Authentication → Settings) or on **self-hosted** GoTrue: `JWT_EXPIRY` in `supabase/docker/.env` (seconds, e.g. `43200` for 12 hours). Restart the Auth service after changing Docker env. Longer JWTs reduce refresh frequency but increase the window where a stolen token is valid—balance with your security policy.
+
 ---
 
 ## 6. Generate TypeScript types (optional)

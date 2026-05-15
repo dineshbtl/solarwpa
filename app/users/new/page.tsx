@@ -7,7 +7,9 @@ import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { ArrowLeft, Save, Loader2, Eye, EyeOff } from "lucide-react"
 import { useForm } from "react-hook-form"
-import { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useFormDraft } from "@/lib/store/use-form-draft"
+import { DraftBanner } from "@/components/draft-banner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,12 +20,10 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/hooks/use-toast"
 import type { Role } from "@/lib/rbac"
-import { roleLabel } from "@/lib/rbac"
+import { roleLabel, ROLE_LABEL, ROLES_LIST } from "@/lib/rbac"
 import { CreateUserSchema, type CreateUserInput } from "@/lib/store/users"
 import { z } from "zod"
-import { createUser, seedUsers } from "@/lib/data/users"
 import { createUserAction } from "@/app/users/actions"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
 import { INDIAN_STATES, OTHER, getDistrictsForState } from "@/lib/data/india-locations"
 import { getCityOptionsForState, getAllCityOptions } from "@/lib/data/indian-cities"
 
@@ -31,8 +31,6 @@ type CreateUserFormValues = CreateUserInput & { stateOther?: string; districtOth
 
 export default function NewUserPage() {
   const router = useRouter()
-
-  seedUsers()
 
   const form = useForm<CreateUserFormValues>({
     resolver: zodResolver(
@@ -63,8 +61,47 @@ export default function NewUserPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+
+  // Persist non-sensitive fields only — password is intentionally NOT written to localStorage.
+  const watchedValues = form.watch()
+  const draftPayload = useMemo(() => {
+    const { password: _password, ...rest } = watchedValues
+    void _password
+    return rest as Omit<CreateUserFormValues, "password">
+  }, [watchedValues])
+  const userDraft = useFormDraft<Omit<CreateUserFormValues, "password">>("users.new", draftPayload)
+  const [draftBannerOpen, setDraftBannerOpen] = useState(false)
+  const [draftBannerSavedAt, setDraftBannerSavedAt] = useState<string | null>(null)
+  const draftCheckedRef = useRef(false)
+
+  useEffect(() => {
+    if (draftCheckedRef.current) return
+    draftCheckedRef.current = true
+    if (userDraft.hasDraft()) {
+      setDraftBannerSavedAt(userDraft.peekSavedAt())
+      setDraftBannerOpen(true)
+    }
+  }, [userDraft])
+
+  const handleRestoreDraft = () => {
+    const d = userDraft.restore()
+    if (d) {
+      form.reset({ ...form.getValues(), ...d, password: form.getValues("password") })
+    }
+    setDraftBannerOpen(false)
+    toast({
+      title: "Draft restored",
+      description: "Password was not saved — please re-enter it before submitting.",
+    })
+  }
+
+  const handleDiscardDraft = () => {
+    userDraft.clear()
+    setDraftBannerOpen(false)
+  }
+
   const selectedState = form.watch("state")
-  const districts = getDistrictsForState(selectedState === OTHER ? "" : selectedState)
+  const districts = getDistrictsForState(selectedState === OTHER ? "" : (selectedState ?? ""))
   const stateOptions = INDIAN_STATES.map((s) => ({ value: s, label: s }))
   const districtOptions = districts.map((d) => ({ value: d, label: d }))
   const cityOptions = selectedState && selectedState !== OTHER
@@ -80,9 +117,8 @@ export default function NewUserPage() {
     }
     setIsSubmitting(true)
     try {
-      const user = isSupabaseConfigured()
-        ? await createUserAction(payload)
-        : await createUser(payload)
+      const user = await createUserAction(payload)
+      userDraft.clear()
       toast({
         title: "User created",
         description: `${user.name} (${roleLabel(user.role)}) was created successfully.`,
@@ -111,6 +147,17 @@ export default function NewUserPage() {
           </Button>
         </Link>
       </div>
+
+      {draftBannerOpen ? (
+        <div className="mb-4 max-w-2xl">
+          <DraftBanner
+            savedAt={draftBannerSavedAt}
+            onRestore={handleRestoreDraft}
+            onDiscard={handleDiscardDraft}
+            hint="Password is not saved — please re-enter it after restoring."
+          />
+        </div>
+      ) : null}
 
       <Card className="max-w-2xl border-border bg-card shadow-sm rounded-xl">
         <CardHeader>
@@ -194,11 +241,11 @@ export default function NewUserPage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value=" " disabled>Select role</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="engineer">Engineer</SelectItem>
-                        <SelectItem value="surveyor">Surveyor</SelectItem>
-                        <SelectItem value="government">Government</SelectItem>
+                        {ROLES_LIST.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {ROLE_LABEL[role]}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />

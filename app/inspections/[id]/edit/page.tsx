@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { ArrowLeft, Save } from "lucide-react"
 
@@ -12,7 +12,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/hooks/use-toast"
 import * as inspectionsData from "@/lib/data/inspections"
-import { getUserById, listUsers, seedUsers } from "@/lib/store/users"
+import { useUsers } from "@/lib/data/hooks"
+import { InspectionEditPageSkeleton } from "@/components/inspections-loading-skeletons"
+import { useFormDraft } from "@/lib/store/use-form-draft"
+import { DraftBanner } from "@/components/draft-banner"
 
 export default function EditInspectionPage() {
   const router = useRouter()
@@ -26,16 +29,53 @@ export default function EditInspectionPage() {
   const [address, setAddress] = useState("")
   const [inspectorId, setInspectorId] = useState<string>("__none__")
 
-  useEffect(() => {
-    seedUsers()
-  }, [])
+  const { data: users = [] } = useUsers()
+  const getUserById = useCallback(
+    (uid: string | undefined) => (uid ? users.find((u) => u.id === uid) : undefined),
+    [users]
+  )
 
-  const inspectorOptions = useMemo(() => listUsers().filter((u) => u.role === "government"), [])
+  const inspectorOptions = useMemo(() => users.filter((u) => u.role === "government"), [users])
+
+  // Local draft so a hung save doesn't drop the user's edits.
+  const draftPayload = useMemo(
+    () => ({ customerName, address, inspectorId }),
+    [customerName, address, inspectorId],
+  )
+  const [draftEnabled, setDraftEnabled] = useState(false)
+  const inspectionDraft = useFormDraft<typeof draftPayload>(
+    id ? `inspections.edit.${id}` : "inspections.edit.__unknown__",
+    draftPayload,
+    { enabled: draftEnabled && !!id },
+  )
+  const [draftBannerOpen, setDraftBannerOpen] = useState(false)
+  const [draftBannerSavedAt, setDraftBannerSavedAt] = useState<string | null>(null)
+  const draftCheckedRef = useRef(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleRestoreDraft = () => {
+    const d = inspectionDraft.restore()
+    if (d) {
+      setCustomerName(d.customerName ?? "")
+      setAddress(d.address ?? "")
+      setInspectorId(d.inspectorId ?? "__none__")
+    }
+    setDraftBannerOpen(false)
+    setDraftEnabled(true)
+    toast({ title: "Draft restored" })
+  }
+
+  const handleDiscardDraft = () => {
+    inspectionDraft.clear()
+    setDraftBannerOpen(false)
+    setDraftEnabled(true)
+  }
 
   useEffect(() => {
-    seedUsers()
+    if (!id) return
+    if (draftCheckedRef.current) return
+    draftCheckedRef.current = true
     const loadData = async () => {
-      if (!id) return
       try {
         const insp = await inspectionsData.getInspectionById(id)
         if (!insp) {
@@ -50,9 +90,18 @@ export default function EditInspectionPage() {
         console.error("Error loading inspection:", e)
         setNotFound(true)
       }
+      if (inspectionDraft.hasDraft()) {
+        setDraftBannerSavedAt(inspectionDraft.peekSavedAt())
+        setDraftBannerOpen(true)
+      } else {
+        setDraftEnabled(true)
+      }
       setLoading(false)
     }
     loadData()
+    // inspectionDraft is intentionally omitted — its identity changes on every debounced
+    // write, but draftCheckedRef ensures we hydrate exactly once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   const handleSave = async () => {
@@ -65,9 +114,11 @@ export default function EditInspectionPage() {
       })
       return
     }
+    setIsSaving(true)
     try {
       const nextInspectorId = inspectorId === "__none__" ? undefined : inspectorId
       await inspectionsData.updateInspectionDetails(id, { customerName, address, inspectorId: nextInspectorId })
+      inspectionDraft.clear()
       toast({ title: "Inspection updated" })
       router.push(`/inspections/${id}`)
     } catch (e) {
@@ -76,15 +127,13 @@ export default function EditInspectionPage() {
         description: e instanceof Error ? e.message : "Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setIsSaving(false)
     }
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen p-6 sm:p-8">
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    )
+    return <InspectionEditPageSkeleton />
   }
 
   if (notFound) {
@@ -112,6 +161,17 @@ export default function EditInspectionPage() {
             Back to Inspection
           </Button>
         </Link>
+
+        {draftBannerOpen ? (
+          <div className="mb-4">
+            <DraftBanner
+              savedAt={draftBannerSavedAt}
+              onRestore={handleRestoreDraft}
+              onDiscard={handleDiscardDraft}
+              hint=""
+            />
+          </div>
+        ) : null}
 
         <Card className="border-border bg-card shadow-sm rounded-xl">
           <CardHeader>
@@ -162,9 +222,9 @@ export default function EditInspectionPage() {
               <Button type="button" variant="outline" onClick={() => router.push(`/inspections/${id}`)}>
                 Cancel
               </Button>
-              <Button type="button" className="bg-gradient-primary-button text-white hover:opacity-90" onClick={handleSave}>
+              <Button type="button" disabled={isSaving} className="bg-gradient-primary-button text-white hover:opacity-90" onClick={handleSave}>
                 <Save className="mr-2 h-4 w-4" />
-                Save Changes
+                {isSaving ? "Saving…" : "Save Changes"}
               </Button>
             </div>
           </CardContent>

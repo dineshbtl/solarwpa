@@ -1,107 +1,61 @@
 /**
- * Unified data layer: Supabase when configured, else localStorage store.
+ * Survey data from Supabase only.
  */
-import { isSupabaseConfigured } from '@/lib/supabase/config'
-import * as store from '@/lib/store/surveys'
+import { assertSupabaseConfigured } from '@/lib/supabase/config'
 import * as supabase from '@/lib/supabase/surveys'
-import type {
-  Survey,
-  CreateSurveyInput,
-  SurveyUploadKeys,
-  FileMeta,
-  SurveyActivityEvent,
+import { buildAuthHeaders } from '@/lib/data/auth-headers'
+import { fetchWithTimeout } from '@/lib/data/fetch-with-timeout'
+
+/** Multipart create/update can include several compressed photos, so allow up to 60s. */
+const SURVEY_UPLOAD_TIMEOUT_MS = 60_000
+/** Status / installer assign are tiny JSON calls — short timeout is fine. */
+const SURVEY_LIGHT_TIMEOUT_MS = 15_000
+import {
+  SURVEY_UPLOAD_KEYS_ORDER,
+  type Survey,
+  type CreateSurveyInput,
+  type SurveyUploadKeys,
+  type FileMeta,
+  type SurveyActivityEvent,
 } from '@/lib/store/surveys'
 
 export type { Survey, CreateSurveyInput, SurveyUploadKeys, FileMeta, SurveyActivityEvent }
 
+let listSurveysInflight: Promise<Survey[]> | null = null
+
 export async function listSurveys(): Promise<Survey[]> {
-  if (isSupabaseConfigured()) return supabase.listSurveysFromSupabase()
-  return Promise.resolve(store.listSurveys())
+  assertSupabaseConfigured()
+  if (!listSurveysInflight) {
+    listSurveysInflight = supabase.listSurveysFromSupabase().finally(() => {
+      listSurveysInflight = null
+    })
+  }
+  return listSurveysInflight
 }
 
-export type ListSurveysPaginatedParams = {
-  limit: number
-  offset: number
-  search?: string
-  section?: string
-  subDivision?: string
-  status?: string
-  feasibility?: string
-}
+export type ListSurveysPaginatedParams = import('@/lib/supabase/surveys').ListSurveysPaginatedParams
 
 export async function listSurveysPaginated(
   params: ListSurveysPaginatedParams
 ): Promise<{ items: Survey[]; total: number }> {
-  if (isSupabaseConfigured()) return supabase.listSurveysFromSupabasePaginated(params)
-  const all = store.listSurveys()
-  const search = params.search?.toLowerCase().trim()
-  let filtered = search
-    ? all.filter(
-        (s) =>
-          (s.beneficiaryName ?? '').toLowerCase().includes(search) ||
-          (s.serviceNo ?? '').toLowerCase().includes(search) ||
-          (s.id ?? '').toLowerCase().includes(search) ||
-          (s.aadharNo ?? '').toLowerCase().includes(search) ||
-          (s.panNo ?? '').toLowerCase().includes(search) ||
-          (s.mobile ?? '').toLowerCase().includes(search) ||
-          (s.siteLocation?.district ?? '').toLowerCase().includes(search) ||
-          (s.siteLocation?.section ?? '').toLowerCase().includes(search)
-      )
-    : [...all]
-  if (params.section?.trim()) {
-    filtered = filtered.filter((s) => (s.siteLocation?.section ?? '') === params.section!.trim())
-  }
-  if (params.subDivision?.trim()) {
-    filtered = filtered.filter((s) => (s.siteLocation?.subDivision ?? '') === params.subDivision!.trim())
-  }
-  if (params.status?.trim()) {
-    filtered = filtered.filter((s) => s.status === params.status!.trim())
-  }
-  if (params.feasibility?.trim()) {
-    if (params.feasibility === 'pending') {
-      filtered = filtered.filter((s) => !s.siteDetails?.overallFeasibility)
-    } else {
-      filtered = filtered.filter((s) => s.siteDetails?.overallFeasibility === params.feasibility!.trim())
-    }
-  }
-  filtered.sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
-  const total = filtered.length
-  const items = filtered.slice(params.offset, params.offset + params.limit)
-  return { items, total }
+  assertSupabaseConfigured()
+  return supabase.listSurveysFromSupabasePaginated(params)
+}
+
+/** Unscoped checks for unique service no / Aadhar across all rows (used by survey forms). */
+export async function isSurveyServiceNoTaken(serviceNo: string, excludeSurveyId?: string): Promise<boolean> {
+  assertSupabaseConfigured()
+  return supabase.isServiceNoTakenGlobally(serviceNo, excludeSurveyId)
+}
+
+export async function isSurveyAadharTaken(aadhar: string, excludeSurveyId?: string): Promise<boolean> {
+  assertSupabaseConfigured()
+  return supabase.isAadharTakenGlobally(aadhar, excludeSurveyId)
 }
 
 export async function getSurveyById(id: string): Promise<Survey | undefined> {
-  if (isSupabaseConfigured()) return supabase.getSurveyByIdFromSupabase(id)
-  return Promise.resolve(store.getSurveyById(id))
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result as string)
-    r.onerror = () => reject(new Error('Failed to read file'))
-    r.readAsDataURL(file)
-  })
-}
-
-/** When Supabase is not used, merge data URLs from uploadFiles into uploads so view can show images. */
-async function mergeDataUrls(
-  uploads: Partial<Record<SurveyUploadKeys, FileMeta>>,
-  uploadFiles: Partial<Record<SurveyUploadKeys, File>> | undefined
-): Promise<Partial<Record<SurveyUploadKeys, FileMeta>>> {
-  if (!uploadFiles || Object.keys(uploadFiles).length === 0) return uploads ?? {}
-  const merged = { ...(uploads ?? {}) }
-  for (const k of Object.keys(uploadFiles) as SurveyUploadKeys[]) {
-    const file = uploadFiles[k]
-    if (!file) continue
-    try {
-      const url = await fileToDataUrl(file)
-      merged[k] = { name: file.name, type: file.type, size: file.size, url }
-    } catch {
-      merged[k] = { name: file.name, type: file.type, size: file.size }
-    }
-  }
-  return merged
+  assertSupabaseConfigured()
+  return supabase.getSurveyByIdFromSupabase(id)
 }
 
 export async function createSurvey(
@@ -111,9 +65,30 @@ export async function createSurvey(
   submittedById?: string,
   uploadFiles?: Partial<Record<SurveyUploadKeys, File>>
 ): Promise<Survey> {
-  if (isSupabaseConfigured()) return supabase.createSurveyInSupabase(input, uploads, siteDetails, submittedById, uploadFiles)
-  const meta = await mergeDataUrls(uploads, uploadFiles)
-  return Promise.resolve(store.createSurvey(input, meta, siteDetails, submittedById))
+  assertSupabaseConfigured()
+  const formData = new FormData()
+  for (const k of SURVEY_UPLOAD_KEYS_ORDER) {
+    const f = uploadFiles?.[k]
+    if (f) formData.set(`file_${k}`, f, f.name)
+  }
+  formData.set('input', JSON.stringify(input))
+  formData.set('siteDetails', JSON.stringify(siteDetails ?? {}))
+  formData.set('meta', JSON.stringify(uploads ?? {}))
+  if (submittedById) formData.set('submittedById', submittedById)
+  const res = await fetchWithTimeout(
+    '/api/surveys/create',
+    {
+      method: 'POST',
+      headers: await buildAuthHeaders(true),
+      body: formData,
+    },
+    SURVEY_UPLOAD_TIMEOUT_MS,
+  )
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not create survey')
+  }
+  return json.survey as Survey
 }
 
 export async function updateSurvey(
@@ -124,30 +99,84 @@ export async function updateSurvey(
   submittedById?: string,
   uploadFiles?: Partial<Record<SurveyUploadKeys, File>>
 ): Promise<Survey> {
-  if (isSupabaseConfigured()) return supabase.updateSurveyInSupabase(id, input, uploads, siteDetails, submittedById, uploadFiles)
-  const meta = await mergeDataUrls(uploads, uploadFiles)
-  return Promise.resolve(store.updateSurvey(id, input, meta, siteDetails, submittedById))
+  assertSupabaseConfigured()
+  const formData = new FormData()
+  for (const k of SURVEY_UPLOAD_KEYS_ORDER) {
+    const f = uploadFiles?.[k]
+    if (f) formData.set(`file_${k}`, f, f.name)
+  }
+  formData.set('id', id)
+  formData.set('input', JSON.stringify(input))
+  formData.set('siteDetails', JSON.stringify(siteDetails ?? {}))
+  formData.set('meta', JSON.stringify(uploads ?? {}))
+  if (submittedById) formData.set('submittedById', submittedById)
+  const res = await fetchWithTimeout(
+    '/api/surveys/update',
+    {
+      method: 'POST',
+      headers: await buildAuthHeaders(true),
+      body: formData,
+    },
+    SURVEY_UPLOAD_TIMEOUT_MS,
+  )
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not update survey')
+  }
+  return json.survey as Survey
 }
 
 export async function updateSurveyStatus(id: string, status: Survey['status']): Promise<Survey> {
-  if (isSupabaseConfigured()) return supabase.updateSurveyStatusInSupabase(id, status)
-  return Promise.resolve(store.updateSurveyStatus(id, status))
+  assertSupabaseConfigured()
+  const res = await fetchWithTimeout(
+    '/api/surveys/status',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await buildAuthHeaders(true)),
+      },
+      body: JSON.stringify({ surveyId: id, status }),
+    },
+    SURVEY_LIGHT_TIMEOUT_MS,
+  )
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not update survey status')
+  }
+  return json.survey as Survey
 }
 
 export async function assignSurveyInstaller(id: string, installerId?: string): Promise<Survey> {
-  if (isSupabaseConfigured()) return supabase.assignSurveyInstallerInSupabase(id, installerId)
-  return Promise.resolve(store.assignSurveyInstaller(id, installerId))
+  assertSupabaseConfigured()
+  const res = await fetchWithTimeout(
+    '/api/surveys/installer',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(await buildAuthHeaders(true)),
+      },
+      body: JSON.stringify({ surveyId: id, installerId: installerId ?? null }),
+    },
+    SURVEY_LIGHT_TIMEOUT_MS,
+  )
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not assign installer')
+  }
+  return json.survey as Survey
 }
 
 export async function appendSurveyActivity(
   id: string,
   event: Omit<SurveyActivityEvent, 'at'> & { at?: string }
 ): Promise<Survey> {
-  if (isSupabaseConfigured()) return supabase.appendSurveyActivityInSupabase(id, event)
-  return Promise.resolve(store.appendSurveyActivity(id, event))
+  assertSupabaseConfigured()
+  return supabase.appendSurveyActivityInSupabase(id, event)
 }
 
 export async function deleteSurvey(id: string): Promise<void> {
-  if (isSupabaseConfigured()) return supabase.deleteSurveyFromSupabase(id)
-  store.deleteSurvey(id)
+  assertSupabaseConfigured()
+  return supabase.deleteSurveyFromSupabase(id)
 }

@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Plus, ShieldCheck, Trash2, Eye, Pencil, CircleDot } from "lucide-react"
+import { Plus, ShieldCheck, Trash2, Eye, Pencil, CircleDot, KeyRound } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,23 +21,20 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from "@/hooks/use-toast"
 import type { Role } from "@/lib/rbac"
-import { permissionsForRole, roleLabel } from "@/lib/rbac"
-import { deleteUser, updateUserRole, seedUsers } from "@/lib/data/users"
-import { deleteUserAction } from "@/app/users/actions"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
+import { permissionLabel, roleLabel, ROLE_LABEL, ROLES_LIST } from "@/lib/rbac"
+import { deleteUserAction, updateUserRoleAction } from "@/app/users/actions"
 import type { UserStatus } from "@/lib/store/users"
 import { useUsers } from "@/lib/data/hooks"
+import { useRole } from "@/contexts/role-context"
+import { UsersTableSkeleton } from "@/components/users-loading-skeletons"
 
 export default function UsersPage() {
   const [search, setSearch] = useState("")
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all")
   const [statusFilter, setStatusFilter] = useState<UserStatus | "all">("all")
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
-  const { data: allUsers = [], refetch } = useUsers()
-
-  useEffect(() => {
-    seedUsers().then(() => refetch())
-  }, [refetch])
+  const { data: allUsers = [], loading, error, refetch } = useUsers()
+  const { resolvePermissionsForRole } = useRole()
 
   const users = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -56,7 +53,7 @@ export default function UsersPage() {
 
   const onRoleChange = async (userId: string, role: Role) => {
     try {
-      const updated = await updateUserRole(userId, role)
+      const updated = await updateUserRoleAction(userId, role)
       toast({
         title: "User updated",
         description: `${updated.name} is now ${roleLabel(updated.role)}.`,
@@ -80,11 +77,7 @@ export default function UsersPage() {
     const userId = deleteTarget.id
     setDeleteTarget(null)
     try {
-      if (isSupabaseConfigured()) {
-        await deleteUserAction(userId)
-      } else {
-        await deleteUser(userId)
-      }
+      await deleteUserAction(userId)
       toast({ title: "User deleted" })
       refetch()
     } catch (e) {
@@ -126,11 +119,11 @@ export default function UsersPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All roles</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="engineer">Engineer</SelectItem>
-                <SelectItem value="surveyor">Surveyor</SelectItem>
-                <SelectItem value="government">Government</SelectItem>
+                {ROLES_LIST.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {ROLE_LABEL[role]}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as UserStatus | "all")}>
@@ -152,22 +145,29 @@ export default function UsersPage() {
           <CardTitle className="text-lg">All users ({users.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
+          {loading && allUsers.length === 0 ? (
+            <UsersTableSkeleton />
+          ) : error ? (
+            <div className="py-10 text-center text-sm text-destructive">
+              Could not load users. Please retry.
+            </div>
+          ) : (
+          <Table className="min-w-[1400px]">
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
+                <TableHead className="sticky left-0 z-20 bg-card shadow-[8px_0_10px_-8px_rgba(0,0,0,0.18)]">User</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created at</TableHead>
                 <TableHead>Permissions</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="sticky right-0 z-20 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.18)]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((u) => (
                 <TableRow key={u.id}>
-                  <TableCell className="min-w-[220px]">
+                  <TableCell className="sticky left-0 z-10 min-w-[220px] bg-card shadow-[8px_0_10px_-8px_rgba(0,0,0,0.12)]">
                     <Link href={`/users/${u.id}`} className="block hover:opacity-80">
                       <div className="flex flex-col">
                         <span className="font-medium text-foreground">{u.name}</span>
@@ -182,11 +182,11 @@ export default function UsersPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="engineer">Engineer</SelectItem>
-                        <SelectItem value="surveyor">Surveyor</SelectItem>
-                        <SelectItem value="government">Government</SelectItem>
+                        {ROLES_LIST.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {ROLE_LABEL[role]}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </TableCell>
@@ -206,26 +206,29 @@ export default function UsersPage() {
                     {u.createdAt ? new Date(u.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—"}
                   </TableCell>
                   <TableCell className="min-w-[280px]">
-                    <div className="flex flex-wrap gap-2">
-                      {permissionsForRole(u.role)
-                        .slice(0, 3)
-                        .map((p) => (
-                          <span
-                            key={p}
-                            className="inline-flex items-center rounded-full bg-muted/50 px-2.5 py-1 text-xs font-medium text-green-700"
-                          >
-                            <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                            {p}
-                          </span>
-                        ))}
-                      {permissionsForRole(u.role).length > 3 && (
-                        <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                          +{permissionsForRole(u.role).length - 3} more
-                        </span>
-                      )}
-                    </div>
+                    {(() => {
+                      const perms = resolvePermissionsForRole(u.role)
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {perms.slice(0, 3).map((p) => (
+                            <span
+                              key={p}
+                              className="inline-flex items-center rounded-full bg-muted/50 px-2.5 py-1 text-xs font-medium text-green-700"
+                            >
+                              <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+                              {permissionLabel(p)}
+                            </span>
+                          ))}
+                          {perms.length > 3 && (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                              +{perms.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="sticky right-0 z-10 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.12)]">
                     <div className="flex items-center justify-end gap-1">
                       <Link href={`/users/${u.id}`}>
                         <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent">
@@ -235,6 +238,11 @@ export default function UsersPage() {
                       <Link href={`/users/${u.id}/edit`}>
                         <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent">
                           <Pencil className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                      <Link href={`/users/${u.id}/edit#password-section`}>
+                        <Button variant="ghost" size="sm" className="text-foreground hover:bg-accent" title="Change password">
+                          <KeyRound className="h-4 w-4" />
                         </Button>
                       </Link>
                       <Button
@@ -258,6 +266,7 @@ export default function UsersPage() {
               )}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 

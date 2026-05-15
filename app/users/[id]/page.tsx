@@ -2,18 +2,21 @@
 
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { ArrowLeft, Pencil, ShieldCheck, CircleDot } from "lucide-react"
+import { ArrowLeft, Pencil, ShieldCheck, CircleDot, KeyRound } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { User } from "@/lib/store/users"
 import { useUser } from "@/lib/data/hooks"
-import { permissionsForRole, roleLabel } from "@/lib/rbac"
+import { permissionLabel, roleLabel } from "@/lib/rbac"
+import { useRole } from "@/contexts/role-context"
+import { UserDetailPageSkeleton } from "@/components/users-loading-skeletons"
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>()
   const id = params?.id ?? null
-  const { data: user, loading } = useUser(id)
+  const { data: user, loading, error } = useUser(id)
+  const { resolvePermissionsForRole } = useRole()
 
   if (!id) {
     return (
@@ -27,9 +30,16 @@ export default function UserDetailPage() {
   }
 
   if (loading) {
+    return <UserDetailPageSkeleton />
+  }
+
+  if (error) {
     return (
       <div className="p-6 sm:p-8">
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-destructive">Could not load user. Please refresh.</p>
+        <Link href="/users">
+          <Button variant="outline" className="mt-4">Back to Users</Button>
+        </Link>
       </div>
     )
   }
@@ -73,12 +83,20 @@ export default function UserDetailPage() {
                 {(user.status ?? "active") === "active" ? "Active" : "Inactive"}
               </span>
             </div>
-            <Link href={`/users/${user.id}/edit`}>
-              <Button variant="outline" size="sm" className="border-solar bg-transparent">
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
-            </Link>
+            <div className="flex gap-2">
+              <Link href={`/users/${user.id}/edit#password-section`}>
+                <Button variant="outline" size="sm" className="border-solar bg-transparent">
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  Change Password
+                </Button>
+              </Link>
+              <Link href={`/users/${user.id}/edit`}>
+                <Button variant="outline" size="sm" className="border-solar bg-transparent">
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              </Link>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -134,13 +152,13 @@ export default function UserDetailPage() {
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-2">Permissions</p>
             <div className="flex flex-wrap gap-2">
-              {permissionsForRole(user.role).map((p) => (
+              {resolvePermissionsForRole(user.role).map((p) => (
                 <span
                   key={p}
                   className="inline-flex items-center rounded-full bg-muted/50 px-2.5 py-1 text-xs font-medium text-green-700"
                 >
                   <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                  {p.replace(/_/g, " ")}
+                  {permissionLabel(p)}
                 </span>
               ))}
             </div>

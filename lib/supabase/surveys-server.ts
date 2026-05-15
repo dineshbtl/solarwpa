@@ -10,10 +10,19 @@ import type {
   FileMeta,
   SurveyActivityEvent,
 } from '@/lib/store/surveys'
+import { SURVEY_UPLOAD_KEYS_ORDER } from '@/lib/store/surveys'
+import type { Role } from '@/lib/rbac'
 import { createSupabaseServerClient } from '@/lib/supabase/server'
+import { ACTIVE_PROJECT_ID } from '@/lib/data/active-project'
+
+// Bypass Supabase v2 complex generic type inference to prevent `never` types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function q(client: any): { from: (table: string) => any } {
+  return client as unknown as { from: (table: string) => any }
+}
+
 
 const SURVEY_UPLOADS_BUCKET = 'solar_bucket'
-const UPLOAD_KEYS: SurveyUploadKeys[] = ['aadhaarCard', 'panCard', 'bankProof', 'eBill', 'beneficiaryPhoto', 'siteLayout', 'roofTerraceNorth', 'roofTerraceSouth', 'earthingAreaPic', 'inverterAreaPic']
 
 function sanitizeFileName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120)
@@ -24,7 +33,7 @@ type SurveyRow = Database['public']['Tables']['surveys']['Row']
 function normalizeUploadsFromRow(raw: unknown): Partial<Record<SurveyUploadKeys, FileMeta>> {
   if (!raw || typeof raw !== 'object') return {}
   const out: Partial<Record<SurveyUploadKeys, FileMeta>> = {}
-  const keys: SurveyUploadKeys[] = ['aadhaarCard', 'panCard', 'bankProof', 'eBill', 'beneficiaryPhoto', 'siteLayout', 'roofTerraceNorth', 'roofTerraceSouth', 'earthingAreaPic', 'inverterAreaPic']
+  const keys: SurveyUploadKeys[] = [...SURVEY_UPLOAD_KEYS_ORDER]
   for (const k of keys) {
     const v = (raw as Record<string, unknown>)[k]
     if (!v || typeof v !== 'object') continue
@@ -61,7 +70,7 @@ function rowToSurvey(row: SurveyRow): Survey {
     submittedAt: row.submitted_at,
     installerId: row.installer_id ?? undefined,
     discomName: row.discom_name,
-    plantType: row.plant_type,
+    plantType: row.plant_type as Survey['plantType'],
     buildingHeight: Number(row.building_height ?? 0),
     totalRoofs: row.total_roofs,
     roofType: row.roof_type,
@@ -103,9 +112,10 @@ export async function updateSurveyWithServiceRole(
   submittedById?: string
 ): Promise<Survey> {
   const supabase = createSupabaseServerClient({ useServiceRole: true })
-  const { data: allSurveys } = await supabase.from('surveys').select('id, service_no')
+  const { data: allSurveys } = await q(supabase).from('surveys').select('id, service_no')
   const serviceNoNorm = input.serviceNo.trim().toLowerCase()
-  const duplicate = (allSurveys ?? []).find((r) => r.id !== id && (r.service_no ?? '').trim().toLowerCase() === serviceNoNorm)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const duplicate = ((allSurveys ?? []) as any[]).find((r: any) => r.id !== id && (r.service_no ?? '').trim().toLowerCase() === serviceNoNorm)
   if (duplicate) throw new Error('Service number is already used by another survey. Please use a unique service number.')
   const now = new Date().toISOString()
   const panNo = (input.panNo ?? '').toString().trim()
@@ -135,22 +145,25 @@ export async function updateSurveyWithServiceRole(
     site_details: siteDetails ?? null,
     uploads: uploadsWithUrls,
     submitted_by_id: submittedById ?? null,
-    remarks: input.remarks ?? null,
   }
-  const { data: current, error: fetchErr } = await supabase.from('surveys').select('activity').eq('id', id).single()
+  const { data: current, error: fetchErr } = await q(supabase).from('surveys').select('activity').eq('id', id).single()
   if (fetchErr || !current) throw fetchErr ?? new Error('Survey not found')
-  const activity = [...((current.activity ?? []) as SurveyActivityEvent[]), { at: now, actorId: submittedById, action: 'edited' as const, message: 'Survey updated' }]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentRow = current as any
+  const activity = [...((currentRow.activity ?? []) as SurveyActivityEvent[]), { at: now, actorId: submittedById, action: 'edited' as const, message: 'Survey updated' }]
   updates.activity = activity
-  const { data, error } = await supabase.from('surveys').update(updates).eq('id', id).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').update(updates as any).eq('id', id).select().single()
   if (error) throw error
-  return rowToSurvey(data)
+  return rowToSurvey(data as any)
 }
 
 /** Get next survey id (SUR-001, SUR-002, ...) using service role. */
 export async function getNextSurveyId(): Promise<string> {
   const supabase = createSupabaseServerClient({ useServiceRole: true })
-  const { data: rows } = await supabase.from('surveys').select('id')
-  const ids = (rows ?? []).map((r) => r.id)
+  const { data: rows } = await q(supabase).from('surveys').select('id')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ids = ((rows ?? []) as any[]).map((r: any) => r.id as string)
   const nums = ids.map((id) => parseInt(id.replace(/^SUR-/, ''), 10)).filter((n) => !Number.isNaN(n))
   const max = nums.length ? Math.max(...nums) : 0
   return `SUR-${(max + 1).toString().padStart(3, '0')}`
@@ -168,9 +181,10 @@ export async function createSurveyWithServiceRole(
   submittedById?: string
 ): Promise<Survey> {
   const supabase = createSupabaseServerClient({ useServiceRole: true })
-  const { data: allSurveys } = await supabase.from('surveys').select('id, service_no')
+  const { data: allSurveys } = await q(supabase).from('surveys').select('id, service_no')
   const serviceNoNorm = input.serviceNo.trim().toLowerCase()
-  const duplicate = (allSurveys ?? []).find((r) => (r.service_no ?? '').trim().toLowerCase() === serviceNoNorm)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const duplicate = ((allSurveys ?? []) as any[]).find((r: any) => (r.service_no ?? '').trim().toLowerCase() === serviceNoNorm)
   if (duplicate) throw new Error('Service number is already used by another survey. Please use a unique service number.')
   const now = new Date().toISOString()
   const panNo = (input.panNo ?? '').toString().trim()
@@ -178,6 +192,7 @@ export async function createSurveyWithServiceRole(
   const bankEmpty = !bank?.bankName?.trim() && !bank?.accountNo?.trim() && !bank?.ifsc?.trim()
   const row = {
     id,
+    project_id: input.projectId ?? ACTIVE_PROJECT_ID,
     beneficiary_name: input.beneficiaryName,
     service_no: input.serviceNo,
     aadhar_no: input.aadharNo,
@@ -201,14 +216,14 @@ export async function createSurveyWithServiceRole(
     site_details: siteDetails ?? null,
     uploads: uploadsWithUrls,
     submitted_by_id: submittedById ?? null,
-    remarks: input.remarks ?? null,
     submitted_at: now,
     upload_date: now,
     activity: [{ at: now, actorId: submittedById, action: 'submitted', message: 'Survey submitted' }],
   }
-  const { data, error } = await supabase.from('surveys').insert(row).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').insert(row as any).select().single()
   if (error) throw error
-  return rowToSurvey(data)
+  return rowToSurvey(data as any)
 }
 
 /** Upload one file to storage using service role (bypasses storage RLS). */
@@ -220,13 +235,34 @@ async function uploadSurveyFileServer(
 ): Promise<string> {
   const supabase = createSupabaseServerClient({ useServiceRole: true })
   const path = `${surveyId}/${key}_${sanitizeFileName(fileName)}`
+  const contentType = file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg'
   const { error } = await supabase.storage.from(SURVEY_UPLOADS_BUCKET).upload(path, file, {
     cacheControl: '3600',
     upsert: true,
+    contentType,
   })
   if (error) throw error
   const { data } = supabase.storage.from(SURVEY_UPLOADS_BUCKET).getPublicUrl(path)
   return data.publicUrl
+}
+
+function isNonEmptyBinaryPart(value: FormDataEntryValue | null): value is Blob {
+  if (value == null || typeof value === 'string') return false
+  const b = value as Blob
+  return typeof b.size === 'number' && b.size > 0
+}
+
+/** Collect `file_<key>` parts; last duplicate field name wins (matches `set` on client). */
+function collectSurveyUploadBlobs(formData: FormData): Map<SurveyUploadKeys, Blob> {
+  const byKey = new Map<SurveyUploadKeys, Blob>()
+  for (const [name, value] of formData.entries()) {
+    if (!name.startsWith('file_')) continue
+    if (!isNonEmptyBinaryPart(value)) continue
+    const key = name.slice('file_'.length) as SurveyUploadKeys
+    if (!(SURVEY_UPLOAD_KEYS_ORDER as readonly string[]).includes(key)) continue
+    byKey.set(key, value)
+  }
+  return byKey
 }
 
 /**
@@ -236,17 +272,101 @@ export async function buildUploadsFromFormData(
   surveyId: string,
   formData: FormData
 ): Promise<Partial<Record<SurveyUploadKeys, FileMeta>>> {
+  let meta: Partial<Record<SurveyUploadKeys, FileMeta>> = {}
   const metaJson = formData.get('meta')
-  const meta: Partial<Record<SurveyUploadKeys, FileMeta>> =
-    typeof metaJson === 'string' ? (JSON.parse(metaJson) as Partial<Record<SurveyUploadKeys, FileMeta>>) : {}
-  const result = { ...meta }
-  for (const key of UPLOAD_KEYS) {
-    const file = formData.get(`file_${key}`)
-    if (file instanceof Blob && file.size > 0) {
-      const name = file instanceof File ? file.name : `upload_${key}`
-      const url = await uploadSurveyFileServer(surveyId, key, file, name)
-      result[key] = { name, type: file.type || 'application/octet-stream', size: file.size, url }
+  if (typeof metaJson === 'string' && metaJson.trim()) {
+    try {
+      meta = JSON.parse(metaJson) as Partial<Record<SurveyUploadKeys, FileMeta>>
+    } catch {
+      meta = {}
     }
   }
+  const result = { ...meta }
+  const filesByKey = collectSurveyUploadBlobs(formData)
+  for (const key of SURVEY_UPLOAD_KEYS_ORDER) {
+    const file = filesByKey.get(key)
+    if (!file) continue
+    const name = typeof File !== 'undefined' && file instanceof File ? file.name : `upload_${key}`
+    const url = await uploadSurveyFileServer(surveyId, key, file, name)
+    result[key] = { name, type: file.type || 'application/octet-stream', size: file.size, url }
+  }
   return result
+}
+
+export async function updateSurveyStatusWithServiceRole(
+  id: string,
+  status: Survey['status'],
+  actor: { userId: string; role: Role }
+): Promise<Survey> {
+  const supabase = createSupabaseServerClient({ useServiceRole: true })
+  const { data: current, error: fetchErr } = await q(supabase).from('surveys').select('*').eq('id', id).single()
+  if (fetchErr || !current) throw fetchErr ?? new Error('Survey not found')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentSurvey = current as any
+  const now = new Date().toISOString()
+  const activity = [
+    ...((currentSurvey.activity ?? []) as SurveyActivityEvent[]),
+    { at: now, actorId: actor.userId, action: 'status_changed' as const, message: `Status changed to ${status}`, meta: { status, byRole: actor.role } },
+  ]
+  const updates: Record<string, unknown> = { status, activity }
+  if (status === 'approved' || status === 'completed') {
+    updates.approved_date = currentSurvey.approved_date ?? now
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').update(updates as any).eq('id', id).select().single()
+  if (error) throw error
+  return rowToSurvey(data as any)
+}
+
+export async function assignSurveyInstallerWithServiceRole(
+  id: string,
+  installerId: string | undefined,
+  actor: { userId: string; role: Role }
+): Promise<Survey> {
+  const supabase = createSupabaseServerClient({ useServiceRole: true })
+  if (installerId) {
+    const { data: installerProfile, error: installerErr } = await q(supabase)
+      .from('profiles')
+      .select('role')
+      .eq('id', installerId)
+      .maybeSingle()
+    if (installerErr) throw installerErr
+    if (installerProfile?.role !== 'installer') {
+      throw new Error('Installer assignment requires a user with installer role')
+    }
+  }
+
+  const { data: current, error: fetchErr } = await q(supabase).from('surveys').select('*').eq('id', id).single()
+  if (fetchErr || !current) throw fetchErr ?? new Error('Survey not found')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentSurvey = current as any
+  if (currentSurvey.status === 'completed') {
+    throw new Error('Installer cannot be changed: household survey is completed.')
+  }
+  const { data: instLatest } = await q(supabase)
+    .from('installations')
+    .select('status')
+    .eq('survey_id', id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const latestSt = (instLatest as any[] | null)?.[0]?.status as string | undefined
+  if (latestSt === 'completed') {
+    throw new Error('Installer cannot be changed: installation is completed.')
+  }
+  const now = new Date().toISOString()
+  const activity = [
+    ...((currentSurvey.activity ?? []) as SurveyActivityEvent[]),
+    {
+      at: now,
+      actorId: actor.userId,
+      action: 'installer_assigned' as const,
+      message: installerId ? `Installer assigned (${installerId})` : 'Installer unassigned',
+      meta: { installerId: installerId ?? null, byRole: actor.role },
+    },
+  ]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('surveys').update({ installer_id: installerId ?? null, activity } as any).eq('id', id).select().single()
+  if (error) throw error
+  return rowToSurvey(data as any)
 }

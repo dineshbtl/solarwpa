@@ -1,53 +1,57 @@
 /**
- * Unified data layer: Supabase (profiles) when configured, else localStorage store.
+ * User/profile data from Supabase only.
  */
 import type { Role } from '@/lib/rbac'
-import { isSupabaseConfigured } from '@/lib/supabase/config'
-import * as store from '@/lib/store/users'
+import { assertSupabaseConfigured } from '@/lib/supabase/config'
 import * as supabase from '@/lib/supabase/users'
 import type { User, CreateUserInput, UpdateUserInput } from '@/lib/store/users'
 
 export type { User, CreateUserInput, UpdateUserInput }
 
+let listUsersInflight: Promise<User[]> | null = null
+
 export async function listUsers(): Promise<User[]> {
-  if (isSupabaseConfigured()) return supabase.listUsersFromSupabase()
-  return Promise.resolve(store.listUsers())
+  assertSupabaseConfigured()
+  if (!listUsersInflight) {
+    listUsersInflight = supabase.listUsersFromSupabase().finally(() => {
+      listUsersInflight = null
+    })
+  }
+  return listUsersInflight
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
-  if (isSupabaseConfigured()) return supabase.getUserByIdFromSupabase(id)
-  return Promise.resolve(store.getUserById(id))
+  assertSupabaseConfigured()
+  return supabase.getUserByIdFromSupabase(id)
 }
 
-/** Seed users only when using store (no-op when Supabase). Returns current users. */
+/** No-op: data lives in Supabase. Kept so callers can still chain refetch after “seed”. */
 export async function seedUsers(): Promise<User[]> {
-  if (isSupabaseConfigured()) return listUsers()
-  return Promise.resolve(store.seedUsers())
+  assertSupabaseConfigured()
+  return []
 }
 
 export async function createUser(input: CreateUserInput): Promise<User> {
-  if (isSupabaseConfigured()) return supabase.createUserInSupabase(input)
-  return Promise.resolve(store.createUser(input))
+  assertSupabaseConfigured()
+  return supabase.createUserInSupabase(input)
 }
 
 export async function updateUser(userId: string, input: UpdateUserInput): Promise<User> {
-  if (isSupabaseConfigured()) return supabase.updateUserInSupabase(userId, input)
-  return Promise.resolve(store.updateUser(userId, input))
+  assertSupabaseConfigured()
+  return supabase.updateUserInSupabase(userId, input)
 }
 
 export async function updateUserRole(userId: string, role: Role): Promise<User> {
-  if (isSupabaseConfigured()) return supabase.updateUserRoleInSupabase(userId, role)
-  return Promise.resolve(store.updateUserRole(userId, role))
+  assertSupabaseConfigured()
+  return supabase.updateUserRoleInSupabase(userId, role)
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  if (isSupabaseConfigured()) return supabase.deleteUserInSupabase(userId)
-  store.deleteUser(userId)
-  return Promise.resolve()
+  assertSupabaseConfigured()
+  return supabase.deleteUserInSupabase(userId)
 }
 
-/** Current logged-in user profile (Supabase only). Returns null when using store or not logged in. */
 export async function getCurrentProfile(): Promise<User | null> {
-  if (!isSupabaseConfigured()) return null
+  assertSupabaseConfigured()
   return supabase.getCurrentProfileFromSupabase()
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Check, ChevronsUpDown, Loader2 } from "lucide-react"
+import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,10 +13,21 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useSurveysLazy } from "@/lib/data/hooks"
+import { useRole } from "@/contexts/role-context"
+import { buildAuthHeaders } from "@/lib/data/auth-headers"
 import type { Survey } from "@/lib/store/surveys"
 
 const SEARCH_DEBOUNCE_MS = 280
+
+type SurveyListItem = {
+  id: string
+  beneficiaryName: string
+  serviceNo: string
+  aadharNo?: string
+  mobile?: string
+  status?: Survey["status"]
+  district?: string
+}
 
 export function SurveySelect({
   value,
@@ -32,47 +43,54 @@ export function SurveySelect({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  const [surveys, setSurveys] = useState<SurveyListItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<Error | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const loadMoreSentinelRef = useRef<HTMLDivElement>(null)
+  const { role } = useRole()
 
-  const {
-    data: surveys,
-    total,
-    loading,
-    loadingMore,
-    hasMore,
-    loadMore,
-    setSearch: setSearchApi,
-  } = useSurveysLazy({ pageSize: 20 })
+  const fetchSurveys = useCallback(async (search: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({ limit: "20", offset: "0" })
+      if (search) params.set("search", search)
+      // For installers, use the API that filters by assigned surveys
+      if (role === "installer") {
+        params.set("forInstaller", "1")
+      }
+      const headers = await buildAuthHeaders()
+      const res = await fetch(`/api/surveys/list?${params.toString()}`, { headers })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = typeof data?.error === "string" ? data.error : `Request failed (${res.status})`
+        throw new Error(msg)
+      }
+      setSurveys(data.items ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error(String(e)))
+    } finally {
+      setLoading(false)
+    }
+  }, [role])
 
   const handleSearch = useCallback(
     (q: string) => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => setSearchApi(q), SEARCH_DEBOUNCE_MS)
+      debounceRef.current = setTimeout(() => fetchSurveys(q), SEARCH_DEBOUNCE_MS)
     },
-    [setSearchApi]
+    [fetchSurveys]
   )
+
+  useEffect(() => {
+    fetchSurveys("")
+  }, [fetchSurveys])
 
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
   }, [])
-
-  // Load more when sentinel is visible (infinite scroll)
-  useEffect(() => {
-    if (!open || !hasMore || loadingMore || loading) return
-    const el = loadMoreSentinelRef.current
-    if (!el) return
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) loadMore()
-      },
-      { root: null, rootMargin: "80px", threshold: 0 }
-    )
-    obs.observe(el)
-    return () => obs.disconnect()
-  }, [open, hasMore, loadingMore, loading, loadMore])
 
   const displayLabel = selectedSurvey
     ? `${selectedSurvey.beneficiaryName} · ${selectedSurvey.serviceNo} (${selectedSurvey.id})`
@@ -95,9 +113,15 @@ export function SurveySelect({
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0" align="start">
         <Command shouldFilter={false}>
-          <CommandInput placeholder="Search by name, service no..." onValueChange={handleSearch} />
+          <CommandInput placeholder="Search by name, phone, Aadhaar, service no, consumer no..." onValueChange={handleSearch} />
           <CommandList className="max-h-[280px]">
-            <CommandEmpty>{loading ? "Loading…" : "No survey found. Type to search."}</CommandEmpty>
+            <CommandEmpty>
+              {loading
+                ? "Loading..."
+                : error
+                ? `Could not load households.${error.message ? ` ${error.message}` : " Check session and permissions."}`
+                : "No survey found. Type to search."}
+            </CommandEmpty>
             <CommandGroup>
               <CommandItem
                 value="__none__"
@@ -114,39 +138,28 @@ export function SurveySelect({
                   key={s.id}
                   value={s.id}
                   onSelect={() => {
-                    onSelect(s)
+                    // Map to Survey-like object for onSelect
+                    onSelect({
+                      id: s.id,
+                      beneficiaryName: s.beneficiaryName,
+                      serviceNo: s.serviceNo,
+                      aadharNo: s.aadharNo ?? "",
+                      mobile: s.mobile,
+                      status: s.status ?? "pending",
+                      siteLocation: {
+                        district: s.district ?? "",
+                        pinCode: "",
+                      },
+                    } as Survey)
                     setOpen(false)
                   }}
                 >
                   <Check className={cn("mr-2 h-4 w-4", value === s.id ? "opacity-100" : "opacity-0")} />
                   <span className="truncate">
-                    {s.beneficiaryName} · {s.serviceNo} ({s.id})
+                    {s.beneficiaryName} · {s.serviceNo} · {s.mobile ?? "No mobile"} · {s.aadharNo ?? "No Aadhaar"} ({s.id})
                   </span>
                 </CommandItem>
               ))}
-              {hasMore && (
-                <div ref={loadMoreSentinelRef} className="flex justify-center py-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={loadingMore}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      loadMore()
-                    }}
-                  >
-                    {loadingMore ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading…
-                      </>
-                    ) : (
-                      `Load more (${surveys.length} of ${total})`
-                    )}
-                  </Button>
-                </div>
-              )}
             </CommandGroup>
           </CommandList>
         </Command>

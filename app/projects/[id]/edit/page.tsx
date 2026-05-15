@@ -2,10 +2,12 @@
 
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { ArrowLeft, Save, Loader2 } from "lucide-react"
+import { useFormDraft } from "@/lib/store/use-form-draft"
+import { DraftBanner } from "@/components/draft-banner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,22 +17,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { toast } from "@/hooks/use-toast"
 import { UpdateProjectSchema, type UpdateProjectInput } from "@/lib/store/projects"
-import { getProjectById, updateProject } from "@/lib/data/projects"
+import { updateProject } from "@/lib/data/projects"
 import { useProject, useUsers } from "@/lib/data/hooks"
-import { seedUsers } from "@/lib/data/users"
 import { siteLocationOptions } from "@/lib/data/site-location-options"
 import { LocationAutocomplete } from "@/components/location-autocomplete"
+import { ProjectEditPageSkeleton } from "@/components/projects-loading-skeletons"
 
 export default function EditProjectPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
   const id = params?.id ?? null
-  const { data: project, loading: projectLoading } = useProject(id)
-  const { data: users = [], refetch: refetchUsers } = useUsers()
-
-  useEffect(() => {
-    seedUsers().then(() => refetchUsers())
-  }, [refetchUsers])
+  const { data: project, loading: projectLoading, error: projectError } = useProject(id)
+  const { data: users = [] } = useUsers()
 
   const managers = useMemo(() => users.filter((u) => u.role === "manager" || u.role === "admin"), [users])
   const surveyors = useMemo(() => users.filter((u) => u.role === "surveyor"), [users])
@@ -51,8 +49,36 @@ export default function EditProjectPage() {
     mode: "onTouched",
   })
 
+  const watchedValues = form.watch()
+  const [draftEnabled, setDraftEnabled] = useState(false)
+  const projectDraft = useFormDraft<UpdateProjectInput>(
+    id ? `projects.edit.${id}` : "projects.edit.__unknown__",
+    watchedValues,
+    { enabled: draftEnabled && !!id },
+  )
+  const [draftBannerOpen, setDraftBannerOpen] = useState(false)
+  const [draftBannerSavedAt, setDraftBannerSavedAt] = useState<string | null>(null)
+  const draftCheckedRef = useRef(false)
+
+  const handleRestoreDraft = () => {
+    const d = projectDraft.restore()
+    if (d) form.reset(d)
+    setDraftBannerOpen(false)
+    setDraftEnabled(true)
+    toast({ title: "Draft restored" })
+  }
+
+  const handleDiscardDraft = () => {
+    projectDraft.clear()
+    setDraftBannerOpen(false)
+    setDraftEnabled(true)
+  }
+
+  const hydratedForProjectIdRef = useRef<string | null>(null)
   useEffect(() => {
     if (!project) return
+    if (hydratedForProjectIdRef.current === project.id) return
+    hydratedForProjectIdRef.current = project.id
     form.reset({
       projectName: project.projectName ?? "",
       description: project.description ?? "",
@@ -64,6 +90,14 @@ export default function EditProjectPage() {
       additionalInfo: project.additionalInfo ?? "",
       assignments: project.assignments ?? {},
     })
+    if (projectDraft.hasDraft()) {
+      setDraftBannerSavedAt(projectDraft.peekSavedAt())
+      setDraftBannerOpen(true)
+    } else {
+      setDraftEnabled(true)
+    }
+    // projectDraft intentionally omitted — id-guard above prevents re-hydration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project, form])
 
   const loading = projectLoading && !!id
@@ -83,6 +117,7 @@ export default function EditProjectPage() {
     setIsSubmitting(true)
     try {
       await updateProject(id, values)
+      projectDraft.clear()
       toast({ title: "Project updated" })
       router.push("/projects")
     } catch (e) {
@@ -97,17 +132,26 @@ export default function EditProjectPage() {
   }
 
   if (loading) {
-    return (
-      <div className="p-6 sm:p-8">
-        <p className="text-sm text-muted-foreground">Loading...</p>
-      </div>
-    )
+    return <ProjectEditPageSkeleton />
   }
 
   if (notFound) {
     return (
       <div className="p-6 sm:p-8">
         <p className="text-sm text-muted-foreground">Project not found.</p>
+        <div className="mt-4">
+          <Link href="/projects">
+            <Button variant="outline">Back</Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (projectError) {
+    return (
+      <div className="p-6 sm:p-8">
+        <p className="text-sm text-destructive">Could not load project. Please refresh.</p>
         <div className="mt-4">
           <Link href="/projects">
             <Button variant="outline">Back</Button>
@@ -127,6 +171,17 @@ export default function EditProjectPage() {
           </Button>
         </Link>
       </div>
+
+      {draftBannerOpen ? (
+        <div className="mb-4 max-w-3xl">
+          <DraftBanner
+            savedAt={draftBannerSavedAt}
+            onRestore={handleRestoreDraft}
+            onDiscard={handleDiscardDraft}
+            hint=""
+          />
+        </div>
+      ) : null}
 
       <Card className="max-w-3xl border-border bg-card shadow-sm rounded-xl">
         <CardHeader>

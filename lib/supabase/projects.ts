@@ -2,8 +2,16 @@
  * Supabase-backed projects CRUD. Maps DB rows (snake_case) to app Project type (camelCase).
  */
 import type { Database } from '@/lib/supabase/database.types'
+import { ACTIVE_PROJECT_ID } from '@/lib/data/active-project'
 import type { Project, ProjectAssignments, CreateProjectInput, UpdateProjectInput } from '@/lib/store/projects'
 import { getSupabaseBrowserClient } from '@/lib/supabase/client'
+
+// Bypass Supabase v2 complex generic type inference to prevent `never` types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function q(client: any): { from: (table: string) => any } {
+  return client as unknown as { from: (table: string) => any }
+}
+
 
 type ProjectRow = Database['public']['Tables']['projects']['Row']
 
@@ -27,16 +35,27 @@ function rowToProject(row: ProjectRow): Project {
   }
 }
 
+async function loadAllProjectsForIdGeneration(): Promise<Project[]> {
+  const supabase = getSupabaseBrowserClient()
+  const { data, error } = await q(supabase).from('projects').select('*').order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map(rowToProject)
+}
+
 export async function listProjectsFromSupabase(): Promise<Project[]> {
   const supabase = getSupabaseBrowserClient()
-  const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
+  const { data, error } = await q(supabase)
+    .from('projects')
+    .select('*')
+    .eq('id', ACTIVE_PROJECT_ID)
+    .order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []).map(rowToProject)
 }
 
 export async function getProjectByIdFromSupabase(id: string): Promise<Project | undefined> {
   const supabase = getSupabaseBrowserClient()
-  const { data, error } = await supabase.from('projects').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await q(supabase).from('projects').select('*').eq('id', id).maybeSingle()
   if (error) throw error
   return data ? rowToProject(data) : undefined
 }
@@ -49,7 +68,7 @@ function nextProjectId(existing: Project[]): string {
 
 export async function createProjectInSupabase(input: CreateProjectInput): Promise<Project> {
   const supabase = getSupabaseBrowserClient()
-  const existing = await listProjectsFromSupabase()
+  const existing = await loadAllProjectsForIdGeneration()
   const id = nextProjectId(existing)
   const row = {
     id,
@@ -63,9 +82,10 @@ export async function createProjectInSupabase(input: CreateProjectInput): Promis
     additional_info: input.additionalInfo ?? null,
     assignments: input.assignments ?? {},
   }
-  const { data, error } = await supabase.from('projects').insert(row).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('projects').insert(row as any).select().single()
   if (error) throw error
-  return rowToProject(data)
+  return rowToProject(data as any)
 }
 
 export async function updateProjectInSupabase(projectId: string, input: UpdateProjectInput): Promise<Project> {
@@ -83,9 +103,10 @@ export async function updateProjectInSupabase(projectId: string, input: UpdatePr
   if (input.assignments !== undefined) {
     updates.assignments = input.assignments
   }
-  const { data, error } = await supabase.from('projects').update(updates).eq('id', projectId).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('projects').update(updates as any).eq('id', projectId).select().single()
   if (error) throw error
-  return rowToProject(data)
+  return rowToProject(data as any)
 }
 
 export async function updateProjectAssignmentsInSupabase(
@@ -93,16 +114,19 @@ export async function updateProjectAssignmentsInSupabase(
   assignments: ProjectAssignments
 ): Promise<Project> {
   const supabase = getSupabaseBrowserClient()
-  const { data: current, error: fetchError } = await supabase.from('projects').select('assignments').eq('id', projectId).single()
+  const { data: current, error: fetchError } = await q(supabase).from('projects').select('assignments').eq('id', projectId).single()
   if (fetchError || !current) throw fetchError || new Error('Project not found')
-  const merged = { ...(current.assignments as object), ...assignments }
-  const { data, error } = await supabase.from('projects').update({ assignments: merged }).eq('id', projectId).select().single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const currentRow = current as any
+  const merged = { ...(currentRow.assignments as object), ...assignments }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await q(supabase).from('projects').update({ assignments: merged } as any).eq('id', projectId).select().single()
   if (error) throw error
-  return rowToProject(data)
+  return rowToProject(data as any)
 }
 
 export async function deleteProjectInSupabase(projectId: string): Promise<void> {
   const supabase = getSupabaseBrowserClient()
-  const { error } = await supabase.from('projects').delete().eq('id', projectId)
+  const { error } = await q(supabase).from('projects').delete().eq('id', projectId)
   if (error) throw error
 }

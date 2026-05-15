@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { readLocalStorageJSON, writeLocalStorageJSON } from "@/lib/store/storage"
+import type { InstallationStatus } from "@/lib/store/installations"
 import { listUsers } from "@/lib/store/users"
 
 export type FileMeta = {
@@ -22,6 +23,20 @@ export type SurveyUploadKeys =
   | "roofTerraceSouth"
   | "earthingAreaPic"
   | "inverterAreaPic"
+
+/** Same order as server `buildUploadsFromFormData` — use for multipart iteration. */
+export const SURVEY_UPLOAD_KEYS_ORDER: readonly SurveyUploadKeys[] = [
+  "aadhaarCard",
+  "panCard",
+  "bankProof",
+  "eBill",
+  "beneficiaryPhoto",
+  "siteLayout",
+  "roofTerraceNorth",
+  "roofTerraceSouth",
+  "earthingAreaPic",
+  "inverterAreaPic",
+] as const
 
 export type SurveyActivityAction =
   | "submitted"
@@ -55,6 +70,9 @@ export type Survey = {
   submittedById?: string
   submittedAt: string
   installerId?: string
+  /** Latest linked installation when listing from assignment view (join). */
+  installationId?: string
+  installationStatus?: InstallationStatus
   discomName: "APSPDCL" | "APCPDCL" | "APEPDCL"
   plantType: "On Grid"
   buildingHeight: number
@@ -100,6 +118,11 @@ export type Survey = {
     recommendedSystemSizeKw?: number | string
     overallFeasibility?: "Feasible" | "Not Feasible"
     notFeasibleReason?: "Insufficient Space" | "Shading" | "Structural Issue" | "Consumer Not Willing"
+    // Supervisor readiness before installation
+    supervisorCivilWorkStatus?: "pending" | "completed"
+    supervisorSiteConditionStatus?: "pending" | "completed"
+    supervisorReadyForEngineer?: boolean
+    supervisorReadinessConfirmedAt?: string
   }
   siteLocation: {
     section?: string
@@ -156,6 +179,7 @@ const OptionalTrimmedString = z.preprocess(
 )
 
 export const CreateSurveySchema = z.object({
+  projectId: z.string().optional(),
   beneficiaryName: z.string().trim().min(2, "Name of the beneficiary is required").max(120),
   serviceNo: z.string().trim().min(2, "Service No is required").max(40),
   aadharNo: z
@@ -230,15 +254,12 @@ export const CreateSurveySchema = z.object({
     })
     .optional()
     .default({}),
-  remarks: z.preprocess(
-    (v) => (typeof v === "string" && v.trim().length === 0 ? undefined : v),
-    z.string().max(2000, "Remarks must be 2000 characters or less").optional(),
-  ),
 })
 
 export type CreateSurveyInput = z.infer<typeof CreateSurveySchema>
 
-const SurveySchema: z.ZodType<Survey> = z.object({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SurveySchema = z.object({
   id: z.string().min(1),
   beneficiaryName: z.string().min(1),
   serviceNo: z.string().min(1),
@@ -395,14 +416,13 @@ export function createSurvey(
     buildingHeight: validated.buildingHeight ?? 0,
     totalRoofs: validated.totalRoofs,
     roofType: validated.roofType,
-    siteLocation: validated.siteLocation,
+    siteLocation: { ...validated.siteLocation, district: validated.siteLocation.district ?? "", pinCode: validated.siteLocation.pinCode ?? "" },
     bankDetails: {
       bankName: validated.bankDetails?.bankName ?? "",
       accountNo: validated.bankDetails?.accountNo ?? "",
       ifsc: (validated.bankDetails?.ifsc ?? "").toString().toUpperCase(),
       branch: validated.bankDetails?.branch ?? "",
     },
-    remarks: validated.remarks,
     uploads,
     siteDetails,
     activity: [
@@ -454,14 +474,13 @@ export function updateSurvey(
     buildingHeight: validated.buildingHeight ?? 0,
     totalRoofs: validated.totalRoofs,
     roofType: validated.roofType,
-    siteLocation: validated.siteLocation,
+    siteLocation: { ...validated.siteLocation, district: validated.siteLocation.district ?? "", pinCode: validated.siteLocation.pinCode ?? "" },
     bankDetails: {
       bankName: validated.bankDetails?.bankName ?? "",
       accountNo: validated.bankDetails?.accountNo ?? "",
       ifsc: (validated.bankDetails?.ifsc ?? "").toString().toUpperCase(),
       branch: validated.bankDetails?.branch ?? "",
     },
-    remarks: validated.remarks,
     uploads,
     siteDetails,
     submittedById: submittedById ?? prev.submittedById,

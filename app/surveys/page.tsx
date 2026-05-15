@@ -1,14 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState, useRef } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Search, Plus, Filter, LayoutGrid, Table2, Pencil, Loader2, Trash2 } from "lucide-react"
-import { mockSurveys } from "@/lib/mock-data"
 import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useSurveysLazy, useUsers } from "@/lib/data/hooks"
+import { useSurveysPaginated, useUsers } from "@/lib/data/hooks"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -25,19 +24,21 @@ import {
 import { toast } from "@/hooks/use-toast"
 import * as surveysData from "@/lib/data/surveys"
 import { Skeleton } from "@/components/ui/skeleton"
-import { isSupabaseConfigured } from "@/lib/supabase/config"
 import { siteLocationOptions } from "@/lib/data/site-location-options"
+import { ACTIVE_PROJECT_ID } from "@/lib/data/active-project"
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 
 const SEARCH_DEBOUNCE_MS = 300
 
 export default function SurveysPage() {
   const {
-    data: lazySurveys,
+    data: surveys,
     total,
     loading: surveysLoading,
-    loadingMore,
-    hasMore,
-    loadMore,
+    error: surveysError,
+    page,
+    pageSize,
+    setPage,
     setSearch: setSearchApi,
     refetch,
     sectionFilter,
@@ -48,14 +49,13 @@ export default function SurveysPage() {
     setSubDivisionFilter,
     setStatusFilter,
     setFeasibilityFilter,
-  } = useSurveysLazy({ pageSize: 20 })
+  } = useSurveysPaginated({ pageSize: 20 })
   const { data: users = [] } = useUsers()
   const [searchQuery, setSearchQuery] = useState("")
   const [view, setView] = useState<"table" | "cards">("table")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const loadMoreRef = useRef<HTMLDivElement>(null)
 
   const getUserById = (id: string) => users.find((u) => u.id === id)
 
@@ -66,53 +66,31 @@ export default function SurveysPage() {
   }, [searchQuery, setSearchApi])
 
   const allSurveys = useMemo(() => {
-    const stored = lazySurveys.map((s) => ({
-      kind: "stored" as const,
-      id: s.id,
-      sno: s.id,
-      circle: s.siteLocation?.circle ?? "",
-      division: s.siteLocation?.division ?? "",
-      subDivision: s.siteLocation?.subDivision ?? "",
-      section: s.siteLocation?.section ?? "",
-      serviceNumber: s.serviceNo,
-      consumerName: s.beneficiaryName,
-      contractedLoad: s.contractedLoad ?? "",
-      uploadDate: s.uploadDate,
-      updatedAt: (s as { updatedAt?: string }).updatedAt,
-      approvedDate: s.approvedDate ?? "",
-      aadhaar: s.aadharNo,
-      mobile: s.mobile ?? "",
-      status: s.status,
-      installerId: s.installerId ?? "",
-      submittedById: s.submittedById ?? "",
-      feasibility: s.siteDetails?.overallFeasibility ?? "",
-    }))
-    if (isSupabaseConfigured()) return stored
-    const legacy = mockSurveys.map((s) => ({
-      kind: "legacy" as const,
-      id: s.id,
-      sno: s.id,
-      circle: "",
-      division: "",
-      subDivision: "",
-      section: "",
-      serviceNumber: "",
-      consumerName: s.customerName,
-      contractedLoad: "",
-      uploadDate: s.createdAt ?? "",
-      approvedDate: s.approvedAt ?? "",
-      aadhaar: "",
-      mobile: "",
-      status: s.status,
-      feasibility: "",
-    }))
-    return [...stored, ...legacy]
-  }, [lazySurveys])
+    return surveys
+      .filter((s) => s.projectId === ACTIVE_PROJECT_ID)
+      .map((s) => ({
+        id: s.id,
+        sno: s.id,
+        circle: s.siteLocation?.circle ?? "",
+        division: s.siteLocation?.division ?? "",
+        subDivision: s.siteLocation?.subDivision ?? "",
+        section: s.siteLocation?.section ?? "",
+        serviceNumber: s.serviceNo,
+        consumerName: s.beneficiaryName,
+        contractedLoad: s.contractedLoad ?? "",
+        uploadDate: s.uploadDate,
+        updatedAt: (s as { updatedAt?: string }).updatedAt,
+        approvedDate: s.approvedDate ?? "",
+        aadhaar: s.aadharNo,
+        mobile: s.mobile ?? "",
+        status: s.status,
+        installerId: s.installerId ?? "",
+        submittedById: s.submittedById ?? "",
+        feasibility: s.siteDetails?.overallFeasibility ?? "",
+      }))
+  }, [surveys])
 
-  const storedInView = useMemo(
-    () => allSurveys.filter((s: { kind: string }) => s.kind === "stored"),
-    [allSurveys]
-  )
+  const storedInView = allSurveys
   const allStoredSelected =
     storedInView.length > 0 && storedInView.every((s) => selectedIds.has(s.id))
   const someSelected = selectedIds.size > 0
@@ -155,20 +133,9 @@ export default function SurveysPage() {
     }
   }
 
-  // Infinite scroll: load more when sentinel is visible
-  useEffect(() => {
-    if (!hasMore || loadingMore || surveysLoading) return
-    const el = loadMoreRef.current
-    if (!el) return
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) loadMore()
-      },
-      { rootMargin: "200px", threshold: 0 }
-    )
-    obs.observe(el)
-    return () => obs.disconnect()
-  }, [hasMore, loadingMore, surveysLoading, loadMore])
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const showInitialSkeleton = surveysLoading && surveys.length === 0
+  const showRefreshing = surveysLoading && surveys.length > 0
 
   return (
     <div className="min-h-screen p-6 sm:p-8">
@@ -280,12 +247,13 @@ export default function SurveysPage() {
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="text-lg">
-                Survey List ({allSurveys.length}{total > allSurveys.length ? ` of ${total}` : ""})
+              <CardTitle className="text-lg inline-flex items-center gap-2">
+                Survey List ({total})
+                {showRefreshing ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Refreshing list" />
+                ) : null}
               </CardTitle>
-              {total > allSurveys.length && (
-                <p className="text-sm text-muted-foreground">Scroll down or click load more to see all results</p>
-              )}
+              <p className="text-sm text-muted-foreground">Use pagination to browse survey records</p>
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
@@ -322,7 +290,10 @@ export default function SurveysPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {surveysLoading ? (
+          {surveysError ? (
+            <div className="pb-4 text-sm text-destructive">Could not load surveys. Please refresh.</div>
+          ) : null}
+          {showInitialSkeleton ? (
             <div className="min-h-[320px] space-y-1.5" aria-busy="true" aria-label="Loading surveys">
               <div className="flex gap-1 border-b pb-1.5">
                 {Array.from({ length: 13 }).map((_, i) => (
@@ -338,12 +309,13 @@ export default function SurveysPage() {
               ))}
             </div>
           ) : (
-          <Tabs value={view} onValueChange={(v) => setView(v as "table" | "cards")}>
+          <Tabs value={view} onValueChange={(v) => setView(v as "table" | "cards")} className={showRefreshing ? "opacity-90" : undefined}>
             <TabsContent value="table">
-              <Table>
+              <div className="w-full overflow-x-auto">
+              <Table className="min-w-[1600px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-24">
+                    <TableHead className="sticky left-0 z-20 w-24 bg-card shadow-[8px_0_10px_-8px_rgba(0,0,0,0.18)]">
                       <div className="flex items-center gap-2">
                         {storedInView.length > 0 && (
                           <Checkbox
@@ -366,22 +338,20 @@ export default function SurveysPage() {
                     <TableHead>Mobile</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Feasibility</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="sticky right-0 z-20 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.18)]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {allSurveys.map((s: any, idx: number) => (
-                    <TableRow key={`${s.kind}-${s.id}`}>
-                      <TableCell className="w-24">
+                    <TableRow key={s.id}>
+                      <TableCell className="sticky left-0 z-10 w-24 bg-card shadow-[8px_0_10px_-8px_rgba(0,0,0,0.12)]">
                         <div className="flex items-center gap-2">
-                          {s.kind === "stored" && (
-                            <Checkbox
-                              checked={selectedIds.has(s.id)}
-                              onCheckedChange={() => toggleSelect(s.id)}
-                              aria-label={`Select ${s.serviceNumber || s.id}`}
-                            />
-                          )}
-                          <span>{idx + 1}</span>
+                          <Checkbox
+                            checked={selectedIds.has(s.id)}
+                            onCheckedChange={() => toggleSelect(s.id)}
+                            aria-label={`Select ${s.serviceNumber || s.id}`}
+                          />
+                          <span>{(page - 1) * pageSize + idx + 1}</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -433,26 +403,11 @@ export default function SurveysPage() {
                           {s.feasibility || "Pending"}
                         </span>
                       </TableCell>
-                      <TableCell>
-                        {s.kind === "stored" ? (
-                          <Link href={`/surveys/${s.id}/edit`} className="inline-flex items-center text-sm underline underline-offset-4">
-                            <Pencil className="mr-1 h-4 w-4" />
-                            Edit
-                          </Link>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="px-2"
-                            onClick={() =>
-                              toast({ title: "Demo record", description: "This survey comes from mock data and can't be edited." })
-                            }
-                          >
-                            <Pencil className="mr-1 h-4 w-4" />
-                            Edit
-                          </Button>
-                        )}
+                      <TableCell className="sticky right-0 z-10 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.12)]">
+                        <Link href={`/surveys/${s.id}/edit`} className="inline-flex min-h-9 items-center text-sm underline underline-offset-4">
+                          <Pencil className="mr-1 h-4 w-4" />
+                          Edit
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -465,17 +420,18 @@ export default function SurveysPage() {
                   )}
                 </TableBody>
               </Table>
+              </div>
             </TabsContent>
 
             <TabsContent value="cards">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {allSurveys.map((s: any, idx: number) => (
-                  <Link key={`${s.kind}-${s.id}`} href={`/surveys/${s.id}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Link key={s.id} href={`/surveys/${s.id}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <Card className="border-border bg-card shadow-sm rounded-xl transition-colors hover:bg-muted/50 cursor-pointer">
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <p className="text-xs text-muted-foreground">SNO: {idx + 1}</p>
+                            <p className="text-xs text-muted-foreground">SNO: {(page - 1) * pageSize + idx + 1}</p>
                             <p className="mt-1 text-xs text-muted-foreground">
                               Service No: <span className="font-medium text-foreground">{s.serviceNumber || "-"}</span>
                             </p>
@@ -550,37 +506,48 @@ export default function SurveysPage() {
           </Tabs>
           )}
 
-          {/* Load more / count */}
+          {/* Pagination / count */}
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              Showing <span className="font-medium">{allSurveys.length}</span>
-              {total > allSurveys.length && (
-                <> of <span className="font-medium">{total}</span></>
-              )}
-              {total > 0 && total === allSurveys.length && (
-                <> survey{total !== 1 ? "s" : ""}</>
-              )}
+              Showing <span className="font-medium">{total === 0 ? 0 : (page - 1) * pageSize + 1}</span>–
+              <span className="font-medium">{Math.min(page * pageSize, total)}</span> of{" "}
+              <span className="font-medium">{total}</span>
             </p>
-            {hasMore && (
-              <div ref={loadMoreRef} className="flex justify-center py-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                  className="rounded-lg"
-                >
-                  {loadingMore ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Loading…
-                    </>
-                  ) : (
-                    "Load more"
-                  )}
-                </Button>
-              </div>
+            {total > 0 && (
+              <Pagination className="justify-end">
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => { e.preventDefault(); setPage(Math.max(1, page - 1)) }}
+                      aria-disabled={page === 1}
+                      className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: Math.min(totalPages, 7) }).map((_, idx) => {
+                    const pageNum = idx + 1
+                    return (
+                      <PaginationItem key={pageNum}>
+                        <PaginationLink
+                          href="#"
+                          isActive={pageNum === page}
+                          onClick={(e) => { e.preventDefault(); setPage(pageNum) }}
+                        >
+                          {pageNum}
+                        </PaginationLink>
+                      </PaginationItem>
+                    )
+                  })}
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => { e.preventDefault(); setPage(Math.min(totalPages, page + 1)) }}
+                      aria-disabled={page === totalPages}
+                      className={page === totalPages ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
             )}
           </div>
         </CardContent>

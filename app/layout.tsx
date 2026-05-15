@@ -1,16 +1,16 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Poppins } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
+import { IBM_Plex_Sans } from "next/font/google"
 import { LayoutWrapper } from "@/components/layout-wrapper"
+import { ChunkLoadRecovery } from "@/components/chunk-load-recovery"
 import { Toaster } from "@/components/ui/toaster"
-import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 
-const poppins = Poppins({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-poppins",
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-ibm-plex-sans",
 })
 
 export const metadata: Metadata = {
@@ -26,17 +26,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${poppins.className} font-sans antialiased`}>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <LayoutWrapper>{children}</LayoutWrapper>
-          <Toaster />
-          <Analytics />
-        </ThemeProvider>
+      <body className={`${ibmPlexSans.variable} font-sans antialiased bg-page`}>
+        {/* Intentionally no next-themes ThemeProvider: it injects an inline script that
+            strict CSP / Safari Private often block and can crash the whole app on `/`. */}
+        <ChunkLoadRecovery />
+        <LayoutWrapper>{children}</LayoutWrapper>
+        <Toaster />
       </body>
     </html>
   )

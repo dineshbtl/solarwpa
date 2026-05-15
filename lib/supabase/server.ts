@@ -20,7 +20,7 @@ export function createSupabaseServerClient(options?: { useServiceRole?: boolean 
   if (!supabaseUrl) {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL. See .env.example and docs/SUPABASE_SELFHOSTED.md.')
   }
-  const key = options?.useServiceRole && serviceRoleKey ? serviceRoleKey : anonKey
+  const key = options?.useServiceRole ? serviceRoleKey : anonKey
   if (!key) {
     throw new Error(
       'Missing Supabase key: set NEXT_PUBLIC_SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY for server admin access.'

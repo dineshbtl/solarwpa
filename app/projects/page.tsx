@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,14 +8,15 @@ import { Folder, CheckCircle, Zap, ClipboardList, TrendingUp, Plus, UserCog, Pen
 import Link from "next/link"
 import { updateProjectAssignments } from "@/lib/data/projects"
 import { useProjects, useUsers, useSurveys, useInstallations, useInspections } from "@/lib/data/hooks"
-import { seedUsers } from "@/lib/data/users"
 import { toast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ACTIVE_PROJECT_ID } from "@/lib/data/active-project"
+import { ProjectsPageSkeleton } from "@/components/projects-loading-skeletons"
 
 export default function ProjectsPage() {
-  const { data: storedProjects, loading: projectsLoading, refetch: refetchProjects } = useProjects()
-  const { data: users = [], refetch: refetchUsers } = useUsers()
+  const { data: storedProjects, loading: projectsLoading, error: projectsError, refetch: refetchProjects } = useProjects()
+  const { data: users = [] } = useUsers()
   const { data: realSurveys = [] } = useSurveys()
   const { data: installations = [] } = useInstallations()
   const { data: inspections = [] } = useInspections()
@@ -25,13 +26,11 @@ export default function ProjectsPage() {
   const [assignSurveyorId, setAssignSurveyorId] = useState<string>("__none__")
   const [assignSaving, setAssignSaving] = useState(false)
 
-  useEffect(() => {
-    seedUsers().then(() => refetchUsers())
-  }, [refetchUsers])
-
   // Projects from database only: enrich each stored project with survey/installation/inspection from DB
   const projects = useMemo(() => {
-    return storedProjects.map((p) => {
+    return storedProjects
+      .filter((p) => p.id === ACTIVE_PROJECT_ID)
+      .map((p) => {
       const projectSurveys = realSurveys.filter((s) => s.projectId === p.id)
       const surveyCount = projectSurveys.length
       const firstSurvey = projectSurveys[0] ?? null
@@ -57,7 +56,7 @@ export default function ProjectsPage() {
         inspection: firstInspection,
         _stored: true,
       }
-    })
+      })
   }, [storedProjects, realSurveys, installations, inspections])
 
   const getUserById = (uid: string) => users.find((u) => u.id === uid)
@@ -117,9 +116,13 @@ export default function ProjectsPage() {
   }
 
   if (projectsLoading && storedProjects.length === 0) {
+    return <ProjectsPageSkeleton />
+  }
+
+  if (projectsError) {
     return (
       <div className="p-8">
-        <p className="text-muted-foreground">Loading projects…</p>
+        <p className="text-destructive">Could not load projects. Please refresh.</p>
       </div>
     )
   }
@@ -223,7 +226,7 @@ export default function ProjectsPage() {
         {projects.map((project) => {
           const status = getProjectStatus(project)
           const manager = project.assignments?.managerId ? getUserById(project.assignments.managerId) : undefined
-          const projectTitle = project.projectName ?? project.customerName ?? project.id
+          const projectTitle = project.projectName ?? project.id
           const surveyor = project.assignments?.surveyorId ? getUserById(project.assignments.surveyorId) : undefined
 
           return (
