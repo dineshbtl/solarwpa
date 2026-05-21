@@ -7,13 +7,13 @@
   },
   "scripts": {
     "postinstall": "patch-package",
-    "build": "next build",
-    "dev": "cross-env WATCHPACK_POLLING=true next dev",
-    "dev:port": "cross-env WATCHPACK_POLLING=true next dev -p ${PORT:-3000}",
-    "dev:3003": "cross-env WATCHPACK_POLLING=true next dev -p 3003",
-    "dev:7100": "cross-env WATCHPACK_POLLING=true next dev -p 7100",
-    "dev:clean": "node -e \"try{require('fs').rmSync('.next/dev/lock',{force:true})}catch(e){}\" && cross-env WATCHPACK_POLLING=true next dev",
-    "dev:clean:3001": "node -e \"try{require('fs').rmSync('.next/dev/lock',{force:true})}catch(e){}\" && cross-env WATCHPACK_POLLING=true next dev -p 3001",
+    "build": "next build --webpack",
+    "dev": "cross-env WATCHPACK_POLLING=true next dev --webpack",
+    "dev:port": "cross-env WATCHPACK_POLLING=true next dev --webpack -p ${PORT:-3000}",
+    "dev:3003": "cross-env WATCHPACK_POLLING=true next dev --webpack -p 3003",
+    "dev:7100": "cross-env WATCHPACK_POLLING=true next dev --webpack -p 7100",
+    "dev:clean": "node -e \"try{require('fs').rmSync('.next/dev/lock',{force:true})}catch(e){}\" && cross-env WATCHPACK_POLLING=true next dev --webpack",
+    "dev:clean:3001": "node -e \"try{require('fs').rmSync('.next/dev/lock',{force:true})}catch(e){}\" && cross-env WATCHPACK_POLLING=true next dev --webpack -p 3001",
     "lint": "eslint .",
     "check:user-auth": "node scripts/check-user-auth-flow.mjs",
     "check:user-auth-one": "node scripts/check-single-user-auth.mjs",
@@ -30,6 +30,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",

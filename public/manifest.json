@@ -1,0 +1,54 @@
+{
+  "name": "Skyvolts - Solar EPC",
+  "short_name": "Skyvolts",
+  "description": "Skyvolts Solar installation EPC workflow management system",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#f59e0b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Go to the main dashboard"
+    },
+    {
+      "name": "Projects",
+      "url": "/projects",
+      "description": "View all projects"
+    },
+    {
+      "name": "Inspections",
+      "url": "/inspections",
+      "description": "View inspections"
+    }
+  ]
+}

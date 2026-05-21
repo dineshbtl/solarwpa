@@ -38,6 +38,10 @@ function clearSupabaseAuthCookiesFromRequest(request: NextRequest, into: NextRes
   }
 }
 
+function hasSupabaseSessionCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some(c => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'))
+}
+
 export async function middleware(request: NextRequest) {
   // MUST match NEXT_PUBLIC_SUPABASE_URL: Supabase auth cookie names are derived from the API
   // hostname (e.g. sb-solarepc-auth-token). If middleware used SUPABASE_URL (127.0.0.1), it would
@@ -67,20 +71,40 @@ export async function middleware(request: NextRequest) {
 
   let user: User | null = null
   let shouldClearStaleSession = false
+  let isOfflineMode = false
 
   try {
     const { data, error } = await supabase.auth.getUser()
     if (!error && data?.user) {
       user = data.user
-    } else if (error && (CLEAR_SESSION_CODES.has(error.code ?? '') || /refresh.?token/i.test(error.message ?? ''))) {
-      shouldClearStaleSession = true
+    } else if (error) {
+      const errMsg = (error.message ?? '').toLowerCase()
+      const isNetworkError =
+        /fetch.?failed|network|connection|enotfound|econnrefused|timeout|failed to fetch/i.test(errMsg) ||
+        error.status === 0 ||
+        error.status === 502 ||
+        error.status === 503 ||
+        error.status === 504
+
+      if (isNetworkError && hasSupabaseSessionCookie(request)) {
+        isOfflineMode = true
+      } else if (CLEAR_SESSION_CODES.has(error.code ?? '') || /refresh.?token/i.test(error.message ?? '')) {
+        shouldClearStaleSession = true
+      }
     }
-  } catch {
-    user = null
-    // Possible network flake — don't auto-clear cookies
+  } catch (err) {
+    const errMsg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+    const isNetworkError =
+      /fetch.?failed|network|connection|enotfound|econnrefused|timeout|failed to fetch/i.test(errMsg)
+    
+    if (isNetworkError && hasSupabaseSessionCookie(request)) {
+      isOfflineMode = true
+    } else {
+      user = null
+    }
   }
 
-  if (shouldClearStaleSession && !user) {
+  if (shouldClearStaleSession && !user && !isOfflineMode) {
     try {
       await supabase.auth.signOut({ scope: 'local' })
     } catch {
@@ -91,7 +115,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isPublicRoute = PUBLIC_ROUTES.includes(pathname)
 
-  if (!user && !isPublicRoute) {
+  if (!user && !isOfflineMode && !isPublicRoute) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/'
     loginUrl.searchParams.set('redirectTo', pathname)
@@ -103,15 +127,10 @@ export async function middleware(request: NextRequest) {
     return redirectRes
   }
 
-  if (user && pathname === '/') {
-    const dashboardUrl = request.nextUrl.clone()
-    dashboardUrl.pathname = '/dashboard'
-    const redirectRes = NextResponse.redirect(dashboardUrl)
-    mergeSetCookieHeaders(res, redirectRes)
-    return redirectRes
-  }
+  // REMOVED: Server-side redirect for '/' to '/dashboard' is handled client-side in app/page.tsx 
+  // to prevent the PWA Service Worker from caching a 307 Redirect (which causes offline white screens).
 
-  return res
+  return res;
 }
 
 export const config = {

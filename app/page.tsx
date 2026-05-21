@@ -84,6 +84,30 @@ function LoginPageContent() {
   const { client: supabase, authReady } = useDeferredSupabaseClient()
   const supabaseConfigured = isSupabaseConfigured()
 
+  useEffect(() => {
+    if (!supabase) return
+
+    const cachedUser = typeof window !== "undefined" ? window.localStorage.getItem("solarepc.currentUser") : null
+
+    // If completely offline and we have a cached user, skip the network hang and redirect immediately
+    if (typeof navigator !== "undefined" && !navigator.onLine && cachedUser) {
+      router.replace("/dashboard")
+      return
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        router.replace("/dashboard")
+      }
+    }).catch((e) => {
+      // If session fetch fails (e.g., timeout due to flaky network) but we have a cached user,
+      // assume we are offline and let them into the app.
+      if (cachedUser) {
+        router.replace("/dashboard")
+      }
+    })
+  }, [supabase, router])
+
   const continueAfterLocationPrompt = () => {
     router.push(getLoginRedirectPath() ?? "/dashboard")
     router.refresh()
@@ -108,82 +132,102 @@ function LoginPageContent() {
     e.preventDefault()
     if (supabaseConfigured && !authReady) return
     setLoading(true)
-    if (supabase) {
-      let signInData: { user: unknown } | null = null
-      let error: { message: string } | null = null
-      try {
-        const normalizedEmail = normalizeLoginEmail(email)
-        const result = await supabase.auth.signInWithPassword({
-          email: normalizedEmail,
-          password,
-        })
-        signInData = result.data
-        error = result.error
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        const isNetwork = /failed to fetch|network|connection|refused|timeout/i.test(msg)
-        toast({
-          title: "Login failed",
-          description: isNetwork
-            ? "Cannot reach the auth server. Open the app using the same address as Supabase (e.g. http://172.30.0.191:3000 for LAN or http://183.82.117.36:3000 for internet) and ensure Supabase is running."
-            : msg || "Please try again.",
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
-      }
-      if (error) {
-        toast({
-          title: "Login failed",
-          description: describeAuthSignInError(error as { message: string; code?: string }),
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
-      }
-
-      // Check profile status — block inactive users
-      try {
-        const authUser = (signInData as { user?: { id?: string } })?.user
-        if (authUser?.id) {
-          const profileRes = await supabase
-            .from("profiles")
-            .select("status")
-            .eq("auth_user_id", authUser.id)
-            .maybeSingle()
-          const profile = profileRes.data as { status: UserStatus } | null
-          if (profile?.status === "inactive") {
-            await supabase.auth.signOut()
-            toast({
-              title: "Account deactivated",
-              description: "Your account has been deactivated. Please contact your administrator.",
-              variant: "destructive",
-            })
-            setLoading(false)
-            return
-          }
+    
+    let success = false
+    try {
+      if (supabase) {
+        let signInData: { user: unknown } | null = null
+        let error: { message: string } | null = null
+        try {
+          const normalizedEmail = normalizeLoginEmail(email)
+          
+          // Failsafe timeout in case Supabase library deadlocks internally
+          const result = await Promise.race([
+            supabase.auth.signInWithPassword({
+              email: normalizedEmail,
+              password,
+            }),
+            new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Login request timed out. Please check your internet connection.')), 20000)
+            )
+          ])
+          
+          signInData = result.data
+          error = result.error
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          const isNetwork = /failed to fetch|network|connection|refused|timeout|time/i.test(msg)
+          toast({
+            title: "Login failed",
+            description: isNetwork
+              ? "Cannot reach the auth server. Please check your internet connection and try again."
+              : msg || "Please try again.",
+            variant: "destructive",
+          })
+          return
         }
-      } catch {
-        // If profile check fails, allow login (profile might not exist yet)
-      }
+        
+        if (error) {
+          toast({
+            title: "Login failed",
+            description: describeAuthSignInError(error as { message: string; code?: string }),
+            variant: "destructive",
+          })
+          return
+        }
 
-      toast({ title: "Welcome back!", description: "Signed in successfully." })
-      setShowLocationPrompt(true)
-      return
+        // Check profile status — block inactive users
+        try {
+          const authUser = (signInData as { user?: { id?: string } })?.user
+          if (authUser?.id) {
+            const profileRes = await Promise.race([
+              supabase
+                .from("profiles")
+                .select("status")
+                .eq("auth_user_id", authUser.id)
+                .maybeSingle(),
+              new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Profile check timed out')), 10000)
+              )
+            ])
+            const profile = profileRes.data as { status: UserStatus } | null
+            if (profile?.status === "inactive") {
+              await supabase.auth.signOut()
+              toast({
+                title: "Account deactivated",
+                description: "Your account has been deactivated. Please contact your administrator.",
+                variant: "destructive",
+              })
+              return
+            }
+          }
+        } catch {
+          // If profile check fails, allow login (profile might not exist yet)
+        }
+
+        success = true
+        toast({ title: "Welcome back!", description: "Signed in successfully." })
+        setShowLocationPrompt(true)
+        return
+      }
+      
+      // Demo fallback when Supabase not configured
+      if (password.trim().length < 4) {
+        toast({
+          title: "Login failed",
+          description: "Please check your credentials and try again.",
+          variant: "destructive",
+        })
+        return
+      }
+      success = true
+      toast({ title: "Login successful", description: "Welcome back! (demo)" })
+      router.push(getLoginRedirectPath() ?? "/dashboard")
+    } finally {
+      if (!success) {
+        setLoading(false)
+      }
     }
-    // Demo fallback when Supabase not configured
-    if (password.trim().length < 4) {
-      toast({
-        title: "Login failed",
-        description: "Please check your credentials and try again.",
-        variant: "destructive",
-      })
-      setLoading(false)
-      return
-    }
-    toast({ title: "Login successful", description: "Welcome back! (demo)" })
-    router.push(getLoginRedirectPath() ?? "/dashboard")
-    setLoading(false)
   }
 
   return (
@@ -312,8 +356,8 @@ function LoginPageContent() {
               />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">SolarEPC</h1>
-          <p className="text-green-100 text-sm">Installation Management System</p>
+          <h1 className="text-3xl font-bold text-white mb-2">Skyvolts</h1>
+          <p className="text-green-100 text-sm">Solar Installation Management</p>
         </div>
 
         <form onSubmit={handleLogin} className="p-8 space-y-6">

@@ -103,10 +103,10 @@ export async function getInstallationsKpiForProject(
 
   // Fallback: use head counts without installer scoping
   const [pendingRes, inProgressRes, completedRes, inspectionPendingRes] = await Promise.all([
-    supabase.from("installations").select("id", { count: "exact", head: true }).eq("project_id", projectId).eq("status", "pending"),
-    supabase.from("installations").select("id", { count: "exact", head: true }).eq("project_id", projectId).eq("status", "in_progress"),
-    supabase.from("installations").select("id", { count: "exact", head: true }).eq("project_id", projectId).eq("status", "completed"),
-    supabase.from("installations").select("id", { count: "exact", head: true }).eq("project_id", projectId).eq("status", "inspection_pending"),
+    supabase.from("installations").select("id", { count: "exact", head: false }).eq("project_id", projectId).eq("status", "pending"),
+    supabase.from("installations").select("id", { count: "exact", head: false }).eq("project_id", projectId).eq("status", "in_progress"),
+    supabase.from("installations").select("id", { count: "exact", head: false }).eq("project_id", projectId).eq("status", "completed"),
+    supabase.from("installations").select("id", { count: "exact", head: false }).eq("project_id", projectId).eq("status", "inspection_pending"),
   ])
 
   if (pendingRes.error) throw pendingRes.error

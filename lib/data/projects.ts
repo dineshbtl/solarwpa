@@ -5,23 +5,40 @@ import { assertSupabaseConfigured } from '@/lib/supabase/config'
 import * as supabase from '@/lib/supabase/projects'
 import type { Project, CreateProjectInput, UpdateProjectInput, ProjectAssignments } from '@/lib/store/projects'
 
+import { offlineDB } from '@/lib/data/offline-db'
+
 export type { Project, CreateProjectInput, UpdateProjectInput, ProjectAssignments }
 
 let listProjectsInflight: Promise<Project[]> | null = null
 
 export async function listProjects(): Promise<Project[]> {
   assertSupabaseConfigured()
-  if (!listProjectsInflight) {
-    listProjectsInflight = supabase.listProjectsFromSupabase().finally(() => {
-      listProjectsInflight = null
-    })
+  try {
+    const list = await supabase.listProjectsFromSupabase()
+    if (typeof window !== 'undefined') {
+      await offlineDB.putMany('projects', list)
+    }
+    return list
+  } catch (err) {
+    const local = await offlineDB.getAll('projects')
+    if (local.length > 0) return local
+    throw err
   }
-  return listProjectsInflight
 }
 
 export async function getProjectById(id: string): Promise<Project | undefined> {
   assertSupabaseConfigured()
-  return supabase.getProjectByIdFromSupabase(id)
+  try {
+    const one = await supabase.getProjectByIdFromSupabase(id)
+    if (one && typeof window !== 'undefined') {
+      await offlineDB.putOne('projects', one)
+    }
+    return one
+  } catch (err) {
+    const local = await offlineDB.getOne('projects', id)
+    if (local) return local as Project
+    throw err
+  }
 }
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {

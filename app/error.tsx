@@ -22,9 +22,9 @@ export default function Error({
           content‑security policy can block required scripts — open the site in a normal window or allow scripts for
           this domain if the problem persists.
         </p>
-        {process.env.NODE_ENV === "development" ? (
-          <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-muted p-3 text-left text-xs">{error.message}</pre>
-        ) : null}
+        <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-muted p-3 text-left text-xs text-red-600 font-mono">
+          {error.message || "Unknown error occurred"}
+        </pre>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3">
         <button
@@ -34,9 +34,23 @@ export default function Error({
         >
           Try again
         </button>
-        <a href="/" className="text-sm font-medium text-green-800 underline underline-offset-4 hover:text-green-900">
-          Back to login
-        </a>
+        <button
+          type="button"
+          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          onClick={async () => {
+            try {
+              const regs = await navigator.serviceWorker.getRegistrations()
+              for (const r of regs) {
+                await r.unregister()
+              }
+              window.localStorage.clear()
+              window.sessionStorage.clear()
+            } catch {}
+            window.location.href = "/"
+          }}
+        >
+          Clear Cache & Reload
+        </button>
       </div>
     </div>
   )

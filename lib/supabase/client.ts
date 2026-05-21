@@ -64,18 +64,36 @@ const SUPABASE_REQUEST_TIMEOUT_MS = 15_000
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit) {
   const ctrl = new AbortController()
   const timeout = setTimeout(() => ctrl.abort(), SUPABASE_REQUEST_TIMEOUT_MS)
+  
+  // If Supabase passes its own signal, we must abort our controller if theirs aborts
+  const onAbort = () => ctrl.abort()
+  if (init?.signal) {
+    if (init.signal.aborted) {
+      ctrl.abort()
+    } else {
+      init.signal.addEventListener('abort', onAbort)
+    }
+  }
+
   try {
     return await fetch(input, {
       ...init,
-      signal: init?.signal ?? ctrl.signal,
+      signal: ctrl.signal, // Use our controller, which is now linked to both the timeout and the original signal
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('Server is taking too long to respond. Please refresh and try again.')
+      // If the original signal aborted, don't throw our custom timeout error
+      if (init?.signal?.aborted) {
+        throw error
+      }
+      throw new Error('Server is taking too long to respond. Please check your network connection and try again.')
     }
     throw error
   } finally {
     clearTimeout(timeout)
+    if (init?.signal && !init.signal.aborted) {
+      init.signal.removeEventListener('abort', onAbort)
+    }
   }
 }
 

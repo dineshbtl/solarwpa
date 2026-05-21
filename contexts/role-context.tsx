@@ -195,6 +195,15 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
           const sessionCheck = (async () => {
             const session = await waitForSessionReady()
             if (cancelled) return
+
+            // OFFLINE FALLBACK: If Supabase couldn't refresh the session because we are offline
+            // (or fetch timed out), but we have a cached user, keep the user logged in so they
+            // can use the local offline DB.
+            if (!session && typeof navigator !== "undefined" && !navigator.onLine && cachedUser) {
+              setHasSession(true)
+              return
+            }
+
             setHasSession(!!session)
           })()
 

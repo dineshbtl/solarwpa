@@ -54,3 +54,10 @@ tmp_*.jpg
 # Consumer list CSVs (PII — keep local only)
 list_latest.csv
 scripts/data/*.csv
+
+# PWA generated files
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+

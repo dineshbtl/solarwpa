@@ -16,8 +16,21 @@ function shouldRecoverFromError(input: unknown): boolean {
 
 function reloadOnceForChunkFailure() {
   if (typeof window === "undefined") return
+
+  // If we are offline, reloading won't fix a chunk load error because the network is down.
+  // Instead, show the fatal offline fallback UI!
+  if (!navigator.onLine) {
+    const fallback = document.getElementById("offline-fatal-fallback")
+    if (fallback) fallback.style.display = "flex"
+    return
+  }
+
   try {
-    if (window.sessionStorage.getItem(RELOAD_GUARD_KEY) === "1") return
+    if (window.sessionStorage.getItem(RELOAD_GUARD_KEY) === "1") {
+      const fallback = document.getElementById("offline-fatal-fallback")
+      if (fallback) fallback.style.display = "flex"
+      return
+    }
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, "1")
   } catch {
     // Safari Private / ITP may block storage — still attempt reload once for chunk errors.

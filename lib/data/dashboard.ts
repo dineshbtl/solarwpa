@@ -42,27 +42,27 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     recentInstallations,
     pendingInspections,
   ] = await Promise.all([
-    supabase.from('projects').select('*', { count: 'exact', head: true }).eq('id', pid),
-    supabase.from('surveys').select('*', { count: 'exact', head: true }).eq('project_id', pid),
-    supabase.from('surveys').select('*', { count: 'exact', head: true }).eq('project_id', pid).eq('status', 'pending'),
+    supabase.from('projects').select('id', { count: 'exact', head: false }).eq('id', pid),
+    supabase.from('surveys').select('id', { count: 'exact', head: false }).eq('project_id', pid),
+    supabase.from('surveys').select('id', { count: 'exact', head: false }).eq('project_id', pid).eq('status', 'pending'),
     supabase
       .from('surveys')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: false })
       .eq('project_id', pid)
       .filter('site_details->>overallFeasibility', 'eq', 'Feasible'),
     supabase
       .from('surveys')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: false })
       .eq('project_id', pid)
       .filter('site_details->>overallFeasibility', 'eq', 'Not Feasible'),
     supabase
       .from('installations')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: false })
       .eq('project_id', pid)
       .in('status', ['in_progress', 'pending', 'inspection_pending']),
     supabase
       .from('installations')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: false })
       .eq('project_id', pid)
       .eq('status', 'completed')
       .gte('completed_at', monthStart),

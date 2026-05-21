@@ -274,11 +274,22 @@ export function useSurveysPaginated(
     ) => {
       setLoading(true)
       setError(null)
+      
+      const params = buildParams(offset, searchTerm, section, subDivision, status, feasibility, installer, installationStatus)
+
+      // 1. Stale-While-Revalidate: Instantly load from local offline database
+      surveysData.listSurveysLocallyPaginated(params).then((local) => {
+        if (local && local.items.length > 0) {
+          setTotal(local.total)
+          setItems(local.items)
+          setLoading(false) // Data immediately visible to user
+        }
+      }).catch(() => {})
+
+      // 2. Fetch fresh data from network in background
       try {
         await ensureSessionReady()
-        const { items: pageItems, total: totalCount } = await surveysData.listSurveysPaginated(
-          buildParams(offset, searchTerm, section, subDivision, status, feasibility, installer, installationStatus),
-        )
+        const { items: pageItems, total: totalCount } = await surveysData.listSurveysPaginated(params)
         setTotal(totalCount)
         setItems(pageItems)
       } catch (e) {
@@ -338,6 +349,13 @@ export function useSurveysPaginated(
   useEffect(() => {
     loadPage(0, '', '', '', '', '', '', '')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- initial load only
+
+  // Background prefetch to fully populate IndexedDB for offline access when online!
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.onLine) {
+      surveysData.listSurveys().catch(() => {});
+    }
+  }, [])
 
   useEffect(() => {
     loadPage(
@@ -678,6 +696,13 @@ export function useInstallationsPaginated(options: { pageSize?: number } = {}) {
     initialPageRequestedRef.current = true
     fetchPage(1, initialPageSize, '', '')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Background prefetch to fully populate IndexedDB for offline access when online!
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.onLine) {
+      installationsData.listInstallations().catch(() => {});
+    }
+  }, [])
 
   const setPage = useCallback(
     (pg: number) => {

@@ -190,6 +190,8 @@ async function ensureSessionForInstallationsApi(): Promise<void> {
   }
 }
 
+import { offlineDB } from '@/lib/data/offline-db'
+
 export async function listInstallationsPaginated(
   params: ListInstallationsParams & { includeKpi?: boolean }
 ): Promise<{
@@ -200,59 +202,140 @@ export async function listInstallationsPaginated(
 }> {
   assertSupabaseConfigured()
   await ensureSessionForInstallationsApi()
-  const sp = new URLSearchParams()
-  sp.set('limit', String(params.limit))
-  sp.set('offset', String(params.offset))
-  sp.set('countMode', 'planned')
-  if (params.search) sp.set('search', params.search)
-  if (params.status) sp.set('status', params.status)
-  if (params.includeKpi) sp.set('includeKpi', '1')
-  const headers = await buildAuthHeaders()
-  const res = await fetch(`/api/installations/list?${sp.toString()}`, {
-    method: 'GET',
-    headers,
-    cache: 'no-store',
-  })
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not load installations list')
-  }
-  const kpiRaw = json.kpi as Record<string, unknown> | undefined
-  let surveyAssignment: InstallationsKpi['surveyAssignment']
-  const sa = kpiRaw?.surveyAssignment as Record<string, unknown> | undefined
-  if (
-    sa &&
-    typeof sa.assignedHouseholds === 'number' &&
-    typeof sa.householdsWithInstallation === 'number' &&
-    typeof sa.householdsPendingInstallation === 'number'
-  ) {
-    surveyAssignment = {
-      assignedHouseholds: sa.assignedHouseholds,
-      householdsWithInstallation: sa.householdsWithInstallation,
-      householdsPendingInstallation: sa.householdsPendingInstallation,
+  
+  try {
+    const sp = new URLSearchParams()
+    sp.set('limit', String(params.limit))
+    sp.set('offset', String(params.offset))
+    sp.set('countMode', 'planned')
+    if (params.search) sp.set('search', params.search)
+    if (params.status) sp.set('status', params.status)
+    if (params.includeKpi) sp.set('includeKpi', '1')
+    const headers = await buildAuthHeaders()
+    const res = await fetch(`/api/installations/list?${sp.toString()}`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(typeof json?.error === 'string' ? json.error : 'Could not load installations list')
     }
+    const items = (json.items ?? []) as InstallationListItem[]
+    if (items.length > 0 && typeof window !== 'undefined') {
+      await offlineDB.putMany('installations', items)
+    }
+
+    const kpiRaw = json.kpi as Record<string, unknown> | undefined
+    let surveyAssignment: InstallationsKpi['surveyAssignment']
+    const sa = kpiRaw?.surveyAssignment as Record<string, unknown> | undefined
+    if (
+      sa &&
+      typeof sa.assignedHouseholds === 'number' &&
+      typeof sa.householdsWithInstallation === 'number' &&
+      typeof sa.householdsPendingInstallation === 'number'
+    ) {
+      surveyAssignment = {
+        assignedHouseholds: sa.assignedHouseholds,
+        householdsWithInstallation: sa.householdsWithInstallation,
+        householdsPendingInstallation: sa.householdsPendingInstallation,
+      }
+    }
+    const kpi: InstallationsKpi | undefined =
+      kpiRaw &&
+      typeof kpiRaw.total === 'number' &&
+      typeof kpiRaw.pending === 'number' &&
+      typeof kpiRaw.inProgress === 'number' &&
+      typeof kpiRaw.completed === 'number' &&
+      typeof kpiRaw.inspectionPending === 'number'
+        ? {
+            total: kpiRaw.total,
+            pending: kpiRaw.pending,
+            inProgress: kpiRaw.inProgress,
+            completed: kpiRaw.completed,
+            inspectionPending: kpiRaw.inspectionPending,
+            ...(surveyAssignment ? { surveyAssignment } : {}),
+          }
+        : undefined
+    return {
+      items,
+      total: typeof json.total === 'number' ? json.total : 0,
+      totalIsEstimate: Boolean(json.totalIsEstimate),
+      kpi,
+    }
+  } catch (err) {
+    const allLocal = await offlineDB.getAll('installations')
+    if (allLocal.length > 0) {
+      const { items, total } = filterInstallationsLocally(allLocal, params)
+      const localKpi = params.includeKpi ? calculateLocalInstallationsKpi(allLocal) : undefined
+      return {
+        items,
+        total,
+        totalIsEstimate: false,
+        kpi: localKpi,
+      }
+    }
+    throw err
   }
-  const kpi: InstallationsKpi | undefined =
-    kpiRaw &&
-    typeof kpiRaw.total === 'number' &&
-    typeof kpiRaw.pending === 'number' &&
-    typeof kpiRaw.inProgress === 'number' &&
-    typeof kpiRaw.completed === 'number' &&
-    typeof kpiRaw.inspectionPending === 'number'
-      ? {
-          total: kpiRaw.total,
-          pending: kpiRaw.pending,
-          inProgress: kpiRaw.inProgress,
-          completed: kpiRaw.completed,
-          inspectionPending: kpiRaw.inspectionPending,
-          ...(surveyAssignment ? { surveyAssignment } : {}),
-        }
-      : undefined
+}
+
+function filterInstallationsLocally(
+  items: any[],
+  params: ListInstallationsParams
+): { items: any[]; total: number } {
+  const {
+    limit = 10,
+    offset = 0,
+    search,
+    status,
+  } = params
+
+  let result = items
+
+  // 1. Search
+  if (search && search.trim()) {
+    const term = search.trim().toLowerCase()
+    result = result.filter(item => 
+      (item.beneficiaryName ?? '').toLowerCase().includes(term) ||
+      (item.serviceNo ?? '').toLowerCase().includes(term) ||
+      (item.id ?? '').toLowerCase().includes(term) ||
+      (item.aadharNo ?? '').toLowerCase().includes(term) ||
+      (item.mobile ?? '').toLowerCase().includes(term) ||
+      (item.consumerName ?? '').toLowerCase().includes(term)
+    )
+  }
+
+  // 2. Status
+  if (status && status.trim()) {
+    result = result.filter(item => item.status === status.trim())
+  }
+
+  // Sort descending by created_at
+  result.sort((a, b) => {
+    const da = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const db = b.createdAt ? new Date(b.createdAt).getTime() : 0
+    return db - da
+  })
+
+  const total = result.length
+  const paginated = result.slice(offset, offset + limit)
+
+  return { items: paginated, total }
+}
+
+function calculateLocalInstallationsKpi(items: any[]): InstallationsKpi {
+  const total = items.length
+  const pending = items.filter(i => i.status === 'pending').length
+  const inProgress = items.filter(i => i.status === 'in_progress' || i.status === 'in-progress').length
+  const completed = items.filter(i => i.status === 'completed').length
+  const inspectionPending = items.filter(i => i.status === 'inspection_pending' || i.status === 'inspection-pending').length
+  
   return {
-    items: (json.items ?? []) as InstallationListItem[],
-    total: typeof json.total === 'number' ? json.total : 0,
-    totalIsEstimate: Boolean(json.totalIsEstimate),
-    kpi,
+    total,
+    pending,
+    inProgress,
+    completed,
+    inspectionPending,
   }
 }
 
@@ -261,55 +344,81 @@ export async function getInstallationsExactTotal(
 ): Promise<number> {
   assertSupabaseConfigured()
   await ensureSessionForInstallationsApi()
-  const sp = new URLSearchParams()
-  sp.set('countOnly', '1')
-  sp.set('countMode', 'exact')
-  if (params.search) sp.set('search', params.search)
-  if (params.status) sp.set('status', params.status)
-  const headers = await buildAuthHeaders()
-  const res = await fetch(`/api/installations/list?${sp.toString()}`, {
-    method: 'GET',
-    headers,
-    cache: 'no-store',
-  })
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not load installations total')
+  try {
+    const sp = new URLSearchParams()
+    sp.set('countOnly', '1')
+    sp.set('countMode', 'exact')
+    if (params.search) sp.set('search', params.search)
+    if (params.status) sp.set('status', params.status)
+    const headers = await buildAuthHeaders()
+    const res = await fetch(`/api/installations/list?${sp.toString()}`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(typeof json?.error === 'string' ? json.error : 'Could not load installations total')
+    }
+    return typeof json.total === 'number' ? json.total : 0
+  } catch (err) {
+    const allLocal = await offlineDB.getAll('installations')
+    const { total } = filterInstallationsLocally(allLocal, params)
+    return total
   }
-  return typeof json.total === 'number' ? json.total : 0
 }
 
 export async function getInstallationsKpi(): Promise<InstallationsKpi> {
   assertSupabaseConfigured()
   await ensureSessionForInstallationsApi()
-  const headers = await buildAuthHeaders()
-  const res = await fetch('/api/installations/kpi', { method: 'GET', headers, cache: 'no-store' })
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not load installations KPI')
-  }
-  return {
-    total: typeof json.total === 'number' ? json.total : 0,
-    pending: typeof json.pending === 'number' ? json.pending : 0,
-    inProgress: typeof json.inProgress === 'number' ? json.inProgress : 0,
-    completed: typeof json.completed === 'number' ? json.completed : 0,
-    inspectionPending: typeof json.inspectionPending === 'number' ? json.inspectionPending : 0,
+  try {
+    const headers = await buildAuthHeaders()
+    const res = await fetch('/api/installations/kpi', { method: 'GET', headers, cache: 'no-store' })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(typeof json?.error === 'string' ? json.error : 'Could not load installations KPI')
+    }
+    return {
+      total: typeof json.total === 'number' ? json.total : 0,
+      pending: typeof json.pending === 'number' ? json.pending : 0,
+      inProgress: typeof json.inProgress === 'number' ? json.inProgress : 0,
+      completed: typeof json.completed === 'number' ? json.completed : 0,
+      inspectionPending: typeof json.inspectionPending === 'number' ? json.inspectionPending : 0,
+    }
+  } catch (err) {
+    const allLocal = await offlineDB.getAll('installations')
+    return calculateLocalInstallationsKpi(allLocal)
   }
 }
 
 export async function listInstallations(): Promise<Installation[]> {
   assertSupabaseConfigured()
-  if (!listInstallationsInflight) {
-    listInstallationsInflight = supabase.listInstallationsFromSupabase().finally(() => {
-      listInstallationsInflight = null
-    })
+  try {
+    const list = await supabase.listInstallationsFromSupabase()
+    if (typeof window !== 'undefined') {
+      await offlineDB.putMany('installations', list)
+    }
+    return list
+  } catch (err) {
+    const local = await offlineDB.getAll('installations')
+    if (local.length > 0) return local
+    throw err
   }
-  return listInstallationsInflight
 }
 
 export async function getInstallationById(id: string): Promise<Installation | undefined> {
   assertSupabaseConfigured()
-  return supabase.getInstallationByIdFromSupabase(id)
+  try {
+    const one = await supabase.getInstallationByIdFromSupabase(id)
+    if (one && typeof window !== 'undefined') {
+      await offlineDB.putOne('installations', one)
+    }
+    return one
+  } catch (err) {
+    const local = await offlineDB.getOne('installations', id)
+    if (local) return local as Installation
+    throw err
+  }
 }
 
 export async function getInstallationBySurveyId(surveyId: string): Promise<Installation | undefined> {

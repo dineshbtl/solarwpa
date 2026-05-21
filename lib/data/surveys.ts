@@ -19,18 +19,26 @@ import {
   type SurveyActivityEvent,
 } from '@/lib/store/surveys'
 
+import { offlineDB } from '@/lib/data/offline-db'
+import { ACTIVE_PROJECT_ID } from '@/lib/data/active-project'
+
 export type { Survey, CreateSurveyInput, SurveyUploadKeys, FileMeta, SurveyActivityEvent }
 
 let listSurveysInflight: Promise<Survey[]> | null = null
 
 export async function listSurveys(): Promise<Survey[]> {
   assertSupabaseConfigured()
-  if (!listSurveysInflight) {
-    listSurveysInflight = supabase.listSurveysFromSupabase().finally(() => {
-      listSurveysInflight = null
-    })
+  try {
+    const list = await supabase.listSurveysFromSupabase()
+    if (typeof window !== 'undefined') {
+      await offlineDB.putMany('surveys', list)
+    }
+    return list
+  } catch (err) {
+    const local = await offlineDB.getAll('surveys')
+    if (local.length > 0) return local
+    throw err
   }
-  return listSurveysInflight
 }
 
 export type ListSurveysPaginatedParams = import('@/lib/supabase/surveys').ListSurveysPaginatedParams
@@ -39,7 +47,103 @@ export async function listSurveysPaginated(
   params: ListSurveysPaginatedParams
 ): Promise<{ items: Survey[]; total: number }> {
   assertSupabaseConfigured()
-  return supabase.listSurveysFromSupabasePaginated(params)
+  try {
+    const result = await supabase.listSurveysFromSupabasePaginated(params)
+    if (typeof window !== 'undefined') {
+      await offlineDB.putMany('surveys', result.items)
+    }
+    return result
+  } catch (err) {
+    const local = await listSurveysLocallyPaginated(params)
+    if (local) return local
+    throw err
+  }
+}
+
+export async function listSurveysLocallyPaginated(
+  params: ListSurveysPaginatedParams
+): Promise<{ items: Survey[]; total: number } | null> {
+  if (typeof window === 'undefined') return null
+  try {
+    const allLocal = await offlineDB.getAll('surveys')
+    if (allLocal.length > 0) {
+      return filterSurveysLocally(allLocal, params)
+    }
+  } catch {}
+  return null
+}
+
+function filterSurveysLocally(
+  items: Survey[],
+  params: ListSurveysPaginatedParams
+): { items: Survey[]; total: number } {
+  const {
+    limit = 20,
+    offset = 0,
+    search,
+    section,
+    subDivision,
+    status,
+    feasibility,
+    installerFilter,
+  } = params
+
+  let result = items
+
+  // 1. Project scope
+  const pid = ACTIVE_PROJECT_ID
+  result = result.filter(s => s.projectId === pid)
+
+  // 2. Installer filter
+  if (installerFilter === '__unassigned__') {
+    result = result.filter(s => !s.installerId)
+  } else if (installerFilter) {
+    result = result.filter(s => s.installerId === installerFilter)
+  }
+
+  // 3. Search
+  if (search && search.trim()) {
+    const term = search.trim().toLowerCase()
+    result = result.filter(s => 
+      (s.beneficiaryName ?? '').toLowerCase().includes(term) ||
+      (s.serviceNo ?? '').toLowerCase().includes(term) ||
+      (s.id ?? '').toLowerCase().includes(term) ||
+      (s.aadharNo ?? '').toLowerCase().includes(term) ||
+      (s.mobile ?? '').toLowerCase().includes(term) ||
+      (s.siteLocation?.section ?? '').toLowerCase().includes(term) ||
+      (s.siteLocation?.subDivision ?? '').toLowerCase().includes(term)
+    )
+  }
+
+  // 4. Filters
+  if (section?.trim()) {
+    result = result.filter(s => s.siteLocation?.section === section.trim())
+  }
+  if (subDivision?.trim()) {
+    result = result.filter(s => s.siteLocation?.subDivision === subDivision.trim())
+  }
+  if (status?.trim()) {
+    result = result.filter(s => s.status === status.trim())
+  }
+  if (feasibility?.trim()) {
+    if (feasibility === 'pending') {
+      result = result.filter(s => !s.siteDetails?.overallFeasibility)
+    } else {
+      result = result.filter(s => s.siteDetails?.overallFeasibility === feasibility.trim())
+    }
+  }
+
+  // Sort descending by created_at or uploadDate
+  result.sort((a, b) => {
+    const da = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const db = b.createdAt ? new Date(b.createdAt).getTime() : 0
+    return db - da
+  })
+
+  const total = result.length
+  const paginated = result.slice(offset, offset + limit)
+
+  return { items: paginated, total }
 }
 
 /** Unscoped checks for unique service no / Aadhar across all rows (used by survey forms). */
@@ -55,7 +159,17 @@ export async function isSurveyAadharTaken(aadhar: string, excludeSurveyId?: stri
 
 export async function getSurveyById(id: string): Promise<Survey | undefined> {
   assertSupabaseConfigured()
-  return supabase.getSurveyByIdFromSupabase(id)
+  try {
+    const one = await supabase.getSurveyByIdFromSupabase(id)
+    if (one && typeof window !== 'undefined') {
+      await offlineDB.putOne('surveys', one)
+    }
+    return one
+  } catch (err) {
+    const local = await offlineDB.getOne('surveys', id)
+    if (local) return local as Survey
+    throw err
+  }
 }
 
 export async function createSurvey(
