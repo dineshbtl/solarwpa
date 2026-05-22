@@ -6,11 +6,30 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   extendDefaultRuntimeCaching: true,
+
   fallbacks: {
     document: "/~offline",
   },
   workboxOptions: {
     runtimeCaching: [
+      {
+        // Cache Next.js App Router RSC payloads (for offline client-side navigation)
+        urlPattern: ({ request, url }) => {
+          return request.headers.get('RSC') === '1' || url.searchParams.has('_rsc') || url.pathname.startsWith('/_next/data/');
+        },
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'rsc-payloads-cache',
+          expiration: {
+            maxEntries: 200,
+            maxAgeSeconds: 24 * 60 * 60, // 24 hours
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+          networkTimeoutSeconds: 3,
+        },
+      },
       {
         // Cache local API routes (/api/installations/list, /api/surveys/list, etc.)
         urlPattern: ({ url }) => url.pathname.startsWith('/api/'),

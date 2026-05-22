@@ -34,6 +34,8 @@ export const metadata: Metadata = {
   },
 }
 
+import { OfflineSyncManager } from "@/components/offline-sync-manager"
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -46,6 +48,7 @@ export default function RootLayout({
             strict CSP / Safari Private often block and can crash the whole app on `/`. */}
         <ChunkLoadRecovery />
         <LayoutWrapper>{children}</LayoutWrapper>
+        <OfflineSyncManager />
         <Toaster />
         <PWAInstallPrompt />
         {/* Fatal Offline Fallback UI (hidden by default) */}

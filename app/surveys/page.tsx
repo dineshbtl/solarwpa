@@ -355,12 +355,12 @@ export default function SurveysPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Link href={`/surveys/${s.id}`} className="underline underline-offset-4">
+                        <Link href={`/survey-details?id=${s.id}`} className="underline underline-offset-4">
                           {s.serviceNumber || s.id}
                         </Link>
                       </TableCell>
                       <TableCell className="min-w-[220px] capitalize">
-                        <Link href={`/surveys/${s.id}`} className="hover:underline underline-offset-4">
+                        <Link href={`/survey-details?id=${s.id}`} className="hover:underline underline-offset-4">
                           {s.consumerName || "-"}
                         </Link>
                       </TableCell>
@@ -404,7 +404,7 @@ export default function SurveysPage() {
                         </span>
                       </TableCell>
                       <TableCell className="sticky right-0 z-10 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.12)]">
-                        <Link href={`/surveys/${s.id}/edit`} className="inline-flex min-h-9 items-center text-sm underline underline-offset-4">
+                        <Link href={`/survey-edit?id=${s.id}`} className="inline-flex min-h-9 items-center text-sm underline underline-offset-4">
                           <Pencil className="mr-1 h-4 w-4" />
                           Edit
                         </Link>
@@ -426,7 +426,7 @@ export default function SurveysPage() {
             <TabsContent value="cards">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {allSurveys.map((s: any, idx: number) => (
-                  <Link key={s.id} href={`/surveys/${s.id}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <Link key={s.id} href={`/survey-details?id=${s.id}`} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <Card className="border-border bg-card shadow-sm rounded-xl transition-colors hover:bg-muted/50 cursor-pointer">
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between gap-3">
