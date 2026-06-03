@@ -10,6 +10,7 @@ import * as surveysData from './surveys'
 import * as installationsData from './installations'
 import * as inspectionsData from './inspections'
 import * as dashboardData from './dashboard'
+import { offlineDB } from './offline-db'
 import type { Project, CreateProjectInput, UpdateProjectInput, ProjectAssignments } from './projects'
 import type { User, CreateUserInput, UpdateUserInput } from './users'
 import type { Survey, CreateSurveyInput, SurveyUploadKeys, FileMeta } from './surveys'
@@ -39,6 +40,9 @@ export function useDashboard() {
   }, [])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }
@@ -194,6 +198,9 @@ export function useSurveys() {
   }, [])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }
@@ -369,6 +376,12 @@ export function useSurveysPaginated(
       installationStatusFilter,
     )
   }, [page, pageSize]) // eslint-disable-line react-hooks/exhaustive-deps -- search/filters use fetchFirstPage to avoid duplicate fetches
+
+  useEffect(() => {
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
+  }, [refetch])
 
   const setSearch = useCallback(
     (q: string) => {
@@ -583,6 +596,9 @@ export function useSurvey(id: string | null) {
   }, [id])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }
@@ -743,6 +759,12 @@ export function useInstallationsPaginated(options: { pageSize?: number } = {}) {
     fetchPage(page, pageSize, search, statusFilter)
   }, [fetchPage, page, pageSize, search, statusFilter])
 
+  useEffect(() => {
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
+  }, [refetch])
+
   return {
     data: items,
     total,
@@ -841,6 +863,12 @@ export function useInspectionsPaginated(options: { pageSize?: number } = {}) {
     fetchPage(page, pageSize, search, statusFilter)
   }, [fetchPage, page, pageSize, search, statusFilter])
 
+  useEffect(() => {
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
+  }, [refetch])
+
   return {
     data: items,
     total,
@@ -880,6 +908,9 @@ export function useInstallations() {
   }, [])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }
@@ -908,6 +939,9 @@ export function useInstallation(id: string | null) {
   }, [id])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }
@@ -936,6 +970,9 @@ export function useInstallationBySurveyId(surveyId: string | null) {
   }, [surveyId])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }
@@ -962,6 +999,9 @@ export function useInspections() {
   }, [])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }
@@ -990,6 +1030,9 @@ export function useInspection(id: string | null) {
   }, [id])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }
@@ -1018,6 +1061,9 @@ export function useInspectionByInstallationId(installationId: string | null) {
   }, [installationId])
   useEffect(() => {
     refetch()
+    return offlineDB.subscribe(() => {
+      refetch()
+    })
   }, [refetch])
   return { data, loading, error, refetch }
 }

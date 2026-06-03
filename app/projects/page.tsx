@@ -294,7 +294,7 @@ export default function ProjectsPage() {
               <CardContent className="pt-4">
                 <div className="flex flex-wrap gap-3 mb-4">
                   {(project.survey || (project.surveyCount ?? 0) > 0) && (
-                    <Link href={project.survey ? `/surveys/${project.survey.id}` : `/surveys?project=${project.id}`}>
+                    <Link href={project.survey ? `/survey-details?id=${project.survey.id}` : `/surveys?project=${project.id}`}>
                       <Card className="cursor-pointer overflow-hidden rounded-lg border border-border shadow-sm transition-all hover:shadow-md hover:bg-muted">
                         <CardContent className="p-4">
                           <p className="text-xs font-medium text-muted-foreground">Survey{((project.surveyCount ?? 0) > 1) ? `s` : ""}</p>
@@ -321,7 +321,7 @@ export default function ProjectsPage() {
                   )}
 
                   {project.installation && (
-                    <Link href={`/installations/${project.installation.id}`}>
+                    <Link href={`/installation-details?id=${project.installation.id}`}>
                       <Card className="cursor-pointer overflow-hidden rounded-lg border border-border shadow-sm transition-all hover:shadow-md hover:bg-muted">
                         <CardContent className="p-4">
                           <p className="text-xs font-medium text-muted-foreground">Installation</p>
@@ -344,7 +344,7 @@ export default function ProjectsPage() {
                   )}
 
                   {project.inspection && (
-                    <Link href={`/inspections/${project.inspection.id}`}>
+                    <Link href={`/inspection-details?id=${project.inspection.id}`}>
                       <Card className="cursor-pointer overflow-hidden rounded-lg border border-border shadow-sm transition-all hover:shadow-md hover:bg-muted">
                         <CardContent className="p-4">
                           <p className="text-xs font-medium text-muted-foreground">Inspection</p>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react"
 import { useInstallationPhotoDisplayUrls } from "@/lib/supabase/installation-photo-urls"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SolarWatermark } from "@/components/solar-watermark"
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, CheckCircle, XCircle, AlertCircle, Pencil, MapPin } from "lucide-react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
 import * as inspectionsData from "@/lib/data/inspections"
 import * as installationsData from "@/lib/data/installations"
@@ -19,13 +19,12 @@ import { WorkflowSummarySection } from "@/components/workflow-summary-section"
 import { parseStoredGps } from "@/lib/installation-photo-gps"
 import { formatSafeDateTime } from "@/lib/format-safe-date"
 import { useRole } from "@/contexts/role-context"
-
 import { InspectionDetailPageSkeleton } from "@/components/inspections-loading-skeletons"
 
-export default function InspectionDetailPage() {
+function InspectionDetailContent() {
   const router = useRouter()
-  const params = useParams<{ id: string }>()
-  const id = params?.id
+  const searchParams = useSearchParams()
+  const id = searchParams?.get("id") ?? null
   const { role, currentUser } = useRole()
   const [govRemarks, setGovRemarks] = useState("")
   const [inspection, setInspection] = useState<any>(null)
@@ -225,7 +224,7 @@ export default function InspectionDetailPage() {
                 </span>
               </div>
               <div className="mt-4 flex justify-end">
-                <Link href={`/inspections/${inspection.id}/edit`}>
+                <Link href={`/inspection-edit?id=${inspection.id}`}>
                   <Button type="button" variant="outline" size="sm" className="border-solar bg-transparent">
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
@@ -254,32 +253,32 @@ export default function InspectionDetailPage() {
           />
 
           <Card className="border-solar bg-solar-card shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg text-foreground">Inspector Assignment</CardTitle>
-                <p className="text-sm text-muted-foreground">Assign a govt-role user to approve/reject</p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Select value={inspectorId} onValueChange={handleAssignInspector}>
-                  <SelectTrigger className="w-full border-solar bg-background">
-                    <SelectValue placeholder="Unassigned" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Unassigned</SelectItem>
-                    {users
-                      .filter((u) => u.role === "government")
-                      .map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.name} ({u.id})
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Current:{" "}
-                  {inspection.inspectorId ? getUserById(inspection.inspectorId)?.name ?? inspection.inspectorId : "Unassigned"}
-                </p>
-              </CardContent>
-            </Card>
+            <CardHeader>
+              <CardTitle className="text-lg text-foreground">Inspector Assignment</CardTitle>
+              <p className="text-sm text-muted-foreground">Assign a govt-role user to approve/reject</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Select value={inspectorId} onValueChange={handleAssignInspector}>
+                <SelectTrigger className="w-full border-solar bg-background">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Unassigned</SelectItem>
+                  {users
+                    .filter((u) => u.role === "government")
+                    .map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name} ({u.id})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Current:{" "}
+                {inspection.inspectorId ? getUserById(inspection.inspectorId)?.name ?? inspection.inspectorId : "Unassigned"}
+              </p>
+            </CardContent>
+          </Card>
 
           {/* Installation Reference */}
           <Card className="border-solar bg-solar-card shadow-sm">
@@ -330,39 +329,39 @@ export default function InspectionDetailPage() {
                     const resolved = installationPhotoDisplayUrls[stableId] || image.url
                     const gps = parseStoredGps(image as Record<string, unknown>)
                     return (
-                    <div key={stableId} className="space-y-2">
-                      <div className="overflow-hidden rounded-lg border border-solar">
-                        <img
-                          src={resolved || "/placeholder.svg"}
-                          alt={image.description || "Installation photo"}
-                          className="h-64 w-full object-cover"
-                        />
+                      <div key={stableId} className="space-y-2">
+                        <div className="overflow-hidden rounded-lg border border-solar">
+                          <img
+                            src={resolved || "/placeholder.svg"}
+                            alt={image.description || "Installation photo"}
+                            className="h-64 w-full object-cover"
+                          />
+                        </div>
+                        <div>
+                          <span className="inline-flex items-center rounded-full bg-solar-yellow px-2 py-1 text-xs font-medium text-foreground">
+                            {(image.category ?? "").replace(/_/g, " ") || "photo"}
+                          </span>
+                          <p className="mt-1 text-sm text-muted-foreground">{image.description || "-"}</p>
+                          {gps && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              <MapPin className="h-3.5 w-3.5 shrink-0" />
+                              <span className="font-mono">
+                                {gps.latitude.toFixed(6)}, {gps.longitude.toFixed(6)}
+                                {gps.gpsAccuracyMeters != null ? ` (±${gps.gpsAccuracyMeters} m)` : ""}
+                              </span>
+                              <a
+                                href={`https://www.google.com/maps?q=${encodeURIComponent(String(gps.latitude))},${encodeURIComponent(String(gps.longitude))}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium text-solar-dark underline-offset-2 hover:underline"
+                              >
+                                Maps
+                              </a>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <span className="inline-flex items-center rounded-full bg-solar-yellow px-2 py-1 text-xs font-medium text-foreground">
-                          {(image.category ?? "").replace(/_/g, " ") || "photo"}
-                        </span>
-                        <p className="mt-1 text-sm text-muted-foreground">{image.description || "-"}</p>
-                        {gps && (
-                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <MapPin className="h-3.5 w-3.5 shrink-0" />
-                            <span className="font-mono">
-                              {gps.latitude.toFixed(6)}, {gps.longitude.toFixed(6)}
-                              {gps.gpsAccuracyMeters != null ? ` (±${gps.gpsAccuracyMeters} m)` : ""}
-                            </span>
-                            <a
-                              href={`https://www.google.com/maps?q=${encodeURIComponent(String(gps.latitude))},${encodeURIComponent(String(gps.longitude))}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-medium text-solar-dark underline-offset-2 hover:underline"
-                            >
-                              Maps
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )})}
+                    )})}
                 </div>
               ) : (
                 <p className="py-6 text-center text-sm text-muted-foreground">No photos available.</p>
@@ -477,5 +476,13 @@ export default function InspectionDetailPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function InspectionDetailPage() {
+  return (
+    <Suspense fallback={<InspectionDetailPageSkeleton showWatermark />}>
+      <InspectionDetailContent />
+    </Suspense>
   )
 }

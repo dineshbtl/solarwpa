@@ -306,7 +306,7 @@ export default function InstallationsPage() {
               ) : (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {items.map((installation) => (
-                    <Link key={installation.id} href={`/installations/${installation.id}`}>
+                    <Link key={installation.id} href={`/installation-details?id=${installation.id}`}>
                       <Card className="h-full border-border bg-card shadow-sm transition-all hover:shadow-lg rounded-xl">
                         <CardHeader>
                           <div className="flex items-start justify-between">
@@ -440,7 +440,7 @@ export default function InstallationsPage() {
                       items.map((i) => (
                         <TableRow key={i.id}>
                           <TableCell className="sticky left-0 z-10 bg-card font-medium shadow-[8px_0_10px_-8px_rgba(0,0,0,0.12)]">
-                            <Link href={`/installations/${i.id}`} className="underline underline-offset-4">
+                            <Link href={`/installation-details?id=${i.id}`} className="underline underline-offset-4">
                               {i.id}
                             </Link>
                           </TableCell>
@@ -464,7 +464,7 @@ export default function InstallationsPage() {
                           <TableCell>{i.startedAt ? new Date(i.startedAt).toLocaleDateString() : "—"}</TableCell>
                           <TableCell>{i.completedAt ? new Date(i.completedAt).toLocaleDateString() : "—"}</TableCell>
                           <TableCell className="sticky right-0 z-10 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.12)]">
-                            <Link href={`/installations/${i.id}/edit`} className="inline-flex min-h-9 items-center text-sm underline underline-offset-4">
+                            <Link href={`/installation-edit?id=${i.id}`} className="inline-flex min-h-9 items-center text-sm underline underline-offset-4">
                               <Pencil className="mr-1 h-4 w-4" />
                               Edit
                             </Link>

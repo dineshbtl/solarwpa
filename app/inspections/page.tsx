@@ -145,7 +145,7 @@ export default function InspectionsPage() {
               ) : (
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {items.map((inspection) => (
-                    <Link key={inspection.id} href={`/inspections/${inspection.id}`}>
+                    <Link key={inspection.id} href={`/inspection-details?id=${inspection.id}`}>
                       <Card className="h-full border-border bg-card shadow-sm transition-all hover:shadow-lg rounded-xl">
                         <CardHeader>
                           <div className="flex items-start justify-between">
@@ -237,7 +237,7 @@ export default function InspectionsPage() {
                       items.map((i) => (
                         <TableRow key={i.id}>
                           <TableCell className="sticky left-0 z-10 bg-card font-medium shadow-[8px_0_10px_-8px_rgba(0,0,0,0.12)]">
-                            <Link href={`/inspections/${i.id}`} className="underline underline-offset-4">
+                            <Link href={`/inspection-details?id=${i.id}`} className="underline underline-offset-4">
                               {i.id}
                             </Link>
                           </TableCell>
@@ -251,7 +251,7 @@ export default function InspectionsPage() {
                             {i.inspectorId ? getUserById(i.inspectorId)?.name ?? i.inspectorId : "—"}
                           </TableCell>
                           <TableCell className="sticky right-0 z-10 bg-card text-right shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.12)]">
-                            <Link href={`/inspections/${i.id}/edit`} className="inline-flex min-h-9 items-center text-sm underline underline-offset-4">
+                            <Link href={`/inspection-edit?id=${i.id}`} className="inline-flex min-h-9 items-center text-sm underline underline-offset-4">
                               <Pencil className="mr-1 h-4 w-4" />
                               Edit
                             </Link>

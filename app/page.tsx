@@ -109,6 +109,9 @@ function LoginPageContent() {
   }, [supabase, router])
 
   const continueAfterLocationPrompt = () => {
+    import("@/lib/data/warmup").then(({ warmupOfflineData }) => {
+      void warmupOfflineData()
+    }).catch(() => {})
     router.push(getLoginRedirectPath() ?? "/dashboard")
     router.refresh()
   }
@@ -222,6 +225,9 @@ function LoginPageContent() {
       }
       success = true
       toast({ title: "Login successful", description: "Welcome back! (demo)" })
+      import("@/lib/data/warmup").then(({ warmupOfflineData }) => {
+        void warmupOfflineData()
+      }).catch(() => {})
       router.push(getLoginRedirectPath() ?? "/dashboard")
     } finally {
       if (!success) {

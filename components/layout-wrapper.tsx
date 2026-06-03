@@ -9,11 +9,15 @@ import { TopHeader } from "@/components/top-header"
 import { RoleProvider, useRole } from "@/contexts/role-context"
 import { canAccessRoute, getAccessibleRoutes } from "@/lib/route-permissions"
 import { hasPermissionFromMap } from "@/lib/rbac"
+import { useOfflineWarmup } from "@/lib/data/warmup"
 
 function RouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { role, currentUser, permissionMap, roleReady, hasSession } = useRole()
+
+  // Proactively warm up and cache all pages/data for offline use when online
+  useOfflineWarmup(hasSession === true)
 
   useEffect(() => {
     const publicPages = ["/", "/signup", "/logout", "/login"]

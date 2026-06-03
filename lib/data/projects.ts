@@ -16,7 +16,7 @@ export async function listProjects(): Promise<Project[]> {
   try {
     const list = await supabase.listProjectsFromSupabase()
     if (typeof window !== 'undefined') {
-      await offlineDB.putMany('projects', list)
+      await offlineDB.putMany('projects', list, { silent: true })
     }
     return list
   } catch (err) {

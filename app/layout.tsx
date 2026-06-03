@@ -35,6 +35,7 @@ export const metadata: Metadata = {
 }
 
 import { OfflineSyncManager } from "@/components/offline-sync-manager"
+import { SyncStatusIndicator } from "@/components/sync-status-indicator"
 
 export default function RootLayout({
   children,
@@ -49,6 +50,7 @@ export default function RootLayout({
         <ChunkLoadRecovery />
         <LayoutWrapper>{children}</LayoutWrapper>
         <OfflineSyncManager />
+        <SyncStatusIndicator />
         <Toaster />
         <PWAInstallPrompt />
         {/* Fatal Offline Fallback UI (hidden by default) */}

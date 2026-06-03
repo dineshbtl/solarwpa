@@ -15,14 +15,17 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useSurveysPaginated, useUsers } from "@/lib/data/hooks"
 import { ACTIVE_PROJECT_ID } from "@/lib/data/active-project"
 import * as surveysData from "@/lib/data/surveys"
+import { buildAuthHeaders } from "@/lib/data/auth-headers"
 import {
   SURVEYS_INSTALLATION_FILTER_ANY,
   SURVEYS_INSTALLATION_FILTER_NONE,
   SURVEYS_INSTALLER_FILTER_UNASSIGNED,
 } from "@/lib/supabase/surveys"
+import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 import { toast } from "@/hooks/use-toast"
 import { useRole } from "@/contexts/role-context"
 import { hasPermissionFromMap } from "@/lib/rbac"
+import * as XLSX from "xlsx"
 
 const SEARCH_DEBOUNCE_MS = 300
 const INSTALLER_NONE = "__none__"
@@ -71,6 +74,183 @@ function SurveyInstallerAssignmentsPageInner() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [bulkInstaller, setBulkInstaller] = useState(INSTALLER_NONE)
   const [bulkSaving, setBulkSaving] = useState(false)
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null)
+
+// -------------------------------------------------------
+// Helper: download CSV template
+const downloadTemplate = () => {
+  const headers = ["installerId", "surveyId", "serviceNo"]
+  const csv = headers.join(",") + "\n"
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.setAttribute("download", "installer_assignment_template.csv")
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+// Helper: download installer IDs list
+const downloadInstallerList = () => {
+  const headers = ["Name", "Email", "installerId"]
+  const rows = installers.map((u) => [
+    `"${(u.name || "").replace(/"/g, '""')}"`,
+    `"${(u.email || "").replace(/"/g, '""')}"`,
+    u.id,
+  ])
+  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n")
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.setAttribute("download", "installer_ids_list.csv")
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+
+// Helper: parse CSV/Excel and bulk assign
+const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+  let rows: { installerId?: string; surveyId?: string }[] = []
+
+  if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+    const data = await file.arrayBuffer()
+    const wb = XLSX.read(data, { type: "array" })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    rows = XLSX.utils.sheet_to_json(ws) as any
+  } else {
+    const text = await file.text()
+    const lines = text.trim().split("\n")
+    const header = lines[0].split(",").map((h) => h.trim().toLowerCase())
+    const installerIdx = header.indexOf("installerid")
+    const surveyIdx = header.indexOf("surveyid")
+    const serviceNoIdx = header.indexOf("serviceno")
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(",")
+      rows.push({
+        installerId: installerIdx >= 0 ? cols[installerIdx]?.trim() : undefined,
+        surveyId: surveyIdx >= 0 ? cols[surveyIdx]?.trim() : undefined,
+        // Also capture serviceNo if present
+        ...(serviceNoIdx >= 0 && { serviceNo: cols[serviceNoIdx]?.trim() })
+      })
+    }
+  }
+
+  setBulkSaving(true)
+  setBulkSaving(true)
+  
+  // 1. Normalize all rows to ensure headers are matched correctly regardless of formatting
+  const normalizedRows = rows.map((r: any) => {
+    const normalized: Record<string, string> = {}
+    for (const key of Object.keys(r)) {
+      if (r[key] !== undefined && r[key] !== null) {
+        const cleanKey = key.toLowerCase().replace(/[\s_.]+/g, "")
+        normalized[cleanKey] = String(r[key]).trim()
+      }
+    }
+    return {
+      installerId: normalized["installerid"] || r.installerId,
+      surveyId: normalized["surveyid"] || r.surveyId,
+      serviceNo: normalized["serviceno"]
+    }
+  })
+
+  // 2. Identify missing survey IDs that have a service number
+  const missingSurveyIdRows = normalizedRows.filter(r => !r.surveyId && r.serviceNo)
+  const serviceNosToResolve = Array.from(new Set(missingSurveyIdRows.map(r => r.serviceNo)))
+
+  let serviceNoToIdMap: Record<string, string> = {}
+
+  // 3. Batch resolve service numbers directly from Supabase
+  if (serviceNosToResolve.length > 0) {
+    try {
+      const supabase = getSupabaseBrowserClient()
+      
+      // Batch into chunks of 100 to avoid overly large queries
+      const chunkSize = 100
+      for (let i = 0; i < serviceNosToResolve.length; i += chunkSize) {
+        const chunk = serviceNosToResolve.slice(i, i + chunkSize)
+        
+        // Use a lightweight, targeted query specifically for ID resolution
+        const { data, error } = await supabase
+          .from("surveys")
+          .select("id, service_no")
+          .eq("project_id", ACTIVE_PROJECT_ID)
+          .in("service_no", chunk)
+        
+        if (!error && data) {
+          for (const row of data) {
+            if (row.service_no) {
+              // Map both exact and lowercase versions for robust lookup
+              serviceNoToIdMap[row.service_no] = row.id
+              serviceNoToIdMap[row.service_no.trim().toLowerCase()] = row.id
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to resolve service numbers via Supabase batch fetch", e)
+    }
+  }
+
+  // 4. Apply resolved IDs and filter to final valid rows
+  const resolvedRows = normalizedRows.map((r) => {
+    let finalSurveyId = r.surveyId
+    if (!finalSurveyId && r.serviceNo) {
+      finalSurveyId = serviceNoToIdMap[r.serviceNo] || serviceNoToIdMap[r.serviceNo.trim().toLowerCase()]
+    }
+    return { ...r, surveyId: finalSurveyId }
+  })
+
+  const valid = resolvedRows.filter((r) => r.installerId && r.surveyId)
+  if (valid.length === 0) {
+    toast({ title: "No valid rows", description: "The file does not contain any valid installer/survey combinations. Ensure you have either surveyId or a matching serviceNo.", variant: "destructive" })
+    setBulkSaving(false)
+    return
+  }
+
+  try {
+    const authHeaders = await buildAuthHeaders()
+    setImportProgress({ current: 0, total: valid.length })
+    
+    let failCount = 0
+    for (let i = 0; i < valid.length; i++) {
+      const r = valid[i]
+      
+      // Direct POST to the live API, completely bypassing the local offline outbox
+      const res = await fetch("/api/surveys/installer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders },
+        body: JSON.stringify({ surveyId: r.surveyId, installerId: r.installerId })
+      })
+
+      if (!res.ok) {
+        failCount++
+      }
+
+      setImportProgress({ current: i + 1, total: valid.length })
+      // Yield occasionally to update the UI counter smoothly
+      if (i % 5 === 0) await new Promise(resolve => setTimeout(resolve, 0))
+    }
+    
+    await refetch()
+    const skipped = rows.length - valid.length
+    const skipMsg = skipped > 0 ? ` (${skipped} skipped due to unmatched IDs)` : ""
+    const failMsg = failCount > 0 ? ` (${failCount} failed to sync to live DB)` : ""
+    toast({ title: "Import complete", description: `${valid.length - failCount} assignments directly live-synced.${skipMsg}${failMsg}` })
+    setSelectedIds(new Set())
+  } catch (e) {
+    toast({ title: "Import error", description: e instanceof Error ? e.message : "Please try again.", variant: "destructive" })
+  } finally {
+    setBulkSaving(false)
+    setImportProgress(null)
+  }
+}
+
   const { role, permissionMap } = useRole()
   const canAssign = hasPermissionFromMap(role, "assign_staff", permissionMap)
 
@@ -156,6 +336,26 @@ function SurveyInstallerAssignmentsPageInner() {
         }
       })
   }, [surveys])
+
+  const downloadSurveysList = () => {
+    const headers = ["Survey ID", "Service No", "Beneficiary", "Mobile", "Installation Status"]
+    const csvRows = rows.map((r) => [
+      r.id,
+      `"${(r.serviceNo || "").replace(/"/g, '""')}"`,
+      `"${(r.beneficiary || "").replace(/"/g, '""')}"`,
+      `"${(r.mobile || "").replace(/"/g, '""')}"`,
+      r.installationStatusLabel || "Not started",
+    ])
+    const csv = [headers.join(","), ...csvRows.map((r) => r.join(","))].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.setAttribute("download", "surveys_list.csv")
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const showInitialSkeleton = loading && surveys.length === 0
@@ -324,42 +524,102 @@ function SurveyInstallerAssignmentsPageInner() {
             </div>
           ) : (
             <>
-              {canAssign && selectedIds.size > 0 ? (
-                <div className="mb-4 flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-4 sm:flex-row sm:flex-wrap sm:items-center">
-                  <p className="text-sm font-medium text-foreground">
-                    {selectedIds.size} household{selectedIds.size === 1 ? "" : "s"} selected
-                  </p>
-                  <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
-                    <SearchableSelect
-                      options={installerOptions}
-                      value={bulkInstaller}
-                      onValueChange={setBulkInstaller}
+              {canAssign ? (
+                <div className="mb-4 flex flex-col gap-3 rounded-lg border border-border bg-muted/40 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  {selectedIds.size > 0 ? (
+                    <>
+                      <p className="text-sm font-medium text-foreground">
+                        {selectedIds.size} household{selectedIds.size === 1 ? "" : "s"} selected
+                      </p>
+                      <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                        <SearchableSelect
+                          options={installerOptions}
+                          value={bulkInstaller}
+                          onValueChange={setBulkInstaller}
+                          disabled={bulkSaving}
+                          placeholder={bulkSaving ? "Saving…" : "Installer for selected…"}
+                          searchPlaceholder="Search by name or email…"
+                          triggerClassName="min-h-9 w-full min-w-[220px] text-sm sm:max-w-md"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="rounded-lg"
+                            disabled={bulkSaving}
+                            onClick={() => void onBulkAssign()}
+                          >
+                            {bulkSaving ? "Applying…" : "Apply to selected"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-lg"
+                            disabled={bulkSaving}
+                            onClick={() => setSelectedIds(new Set())}
+                          >
+                            Clear selection
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex-1" /> // Spacer when nothing selected
+                  )}
+
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg"
                       disabled={bulkSaving}
-                      placeholder={bulkSaving ? "Saving…" : "Installer for selected…"}
-                      searchPlaceholder="Search by name or email…"
-                      triggerClassName="min-h-9 w-full min-w-[220px] text-sm sm:max-w-md"
+                      onClick={downloadSurveysList}
+                    >
+                      Download surveys
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg"
+                      disabled={bulkSaving}
+                      onClick={downloadInstallerList}
+                    >
+                      Download installers
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-lg"
+                      disabled={bulkSaving}
+                      onClick={downloadTemplate}
+                    >
+                      Download template
+                    </Button>
+
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      className="hidden"
+                      id="import-file"
+                      onChange={handleFileUpload}
+                      disabled={bulkSaving}
                     />
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="rounded-lg"
-                        disabled={bulkSaving}
-                        onClick={() => void onBulkAssign()}
-                      >
-                        {bulkSaving ? "Applying…" : "Apply to selected"}
-                      </Button>
+                    <label htmlFor="import-file">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         className="rounded-lg"
                         disabled={bulkSaving}
-                        onClick={() => setSelectedIds(new Set())}
+                        asChild
                       >
-                        Clear selection
+                        <span>{importProgress ? `Processing ${importProgress.current} / ${importProgress.total}...` : "Import assignments"}</span>
                       </Button>
-                    </div>
+                    </label>
                   </div>
                 </div>
               ) : null}
@@ -429,7 +689,7 @@ function SurveyInstallerAssignmentsPageInner() {
                           <TableCell className="text-right">
                             {row.installationId ? (
                               <Button variant="outline" size="sm" asChild className="rounded-lg">
-                                <Link href={`/installations/${row.installationId}`}>Installation details</Link>
+                                <Link href={`/installation-details?id=${row.installationId}`}>Installation details</Link>
                               </Button>
                             ) : (
                               <Button variant="outline" size="sm" asChild className="rounded-lg">

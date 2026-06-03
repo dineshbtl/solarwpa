@@ -486,7 +486,7 @@ function EditSurveyContent() {
   return (
     <div className="min-h-screen">
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <Link href={`/surveys/${id}`}>
+        <Link href={`/survey-details?id=${id}`}>
           <Button variant="outline" className="mb-6 border-gray-300 bg-white text-muted-foreground800 hover:bg-muted hover:border-gray-400">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Survey
@@ -574,7 +574,7 @@ function EditSurveyContent() {
                                 field.onBlur()
                                 const v = form.getValues("serviceNo")?.trim()
                                 if (!v) return
-                                const duplicate = await surveysData.isSurveyServiceNoTaken(v, id)
+                                const duplicate = await surveysData.isSurveyServiceNoTaken(v, id ?? undefined)
                                 if (duplicate) {
                                   form.setError("serviceNo", {
                                     message: "Service number is already used by another survey.",

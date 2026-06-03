@@ -1,10 +1,8 @@
-/**
- * Survey data from Supabase only.
- */
 import { assertSupabaseConfigured } from '@/lib/supabase/config'
 import * as supabase from '@/lib/supabase/surveys'
 import { buildAuthHeaders } from '@/lib/data/auth-headers'
 import { fetchWithTimeout } from '@/lib/data/fetch-with-timeout'
+import { processSyncQueue } from './sync'
 
 /** Multipart create/update can include several compressed photos, so allow up to 60s. */
 const SURVEY_UPLOAD_TIMEOUT_MS = 60_000
@@ -27,18 +25,25 @@ export type { Survey, CreateSurveyInput, SurveyUploadKeys, FileMeta, SurveyActiv
 let listSurveysInflight: Promise<Survey[]> | null = null
 
 export async function listSurveys(): Promise<Survey[]> {
-  assertSupabaseConfigured()
-  try {
-    const list = await supabase.listSurveysFromSupabase()
-    if (typeof window !== 'undefined') {
-      await offlineDB.putMany('surveys', list)
+  const local = typeof window !== 'undefined' ? await offlineDB.getAll('surveys') : []
+  
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    const fetchPromise = supabase.listSurveysFromSupabase()
+      .then(async (list) => {
+        await offlineDB.putMany('surveys', list, { silent: true })
+        return list
+      })
+      .catch((err) => {
+        console.warn('Background sync listSurveys failed:', err)
+        return local
+      })
+
+    if (local.length === 0) {
+      return fetchPromise
     }
-    return list
-  } catch (err) {
-    const local = await offlineDB.getAll('surveys')
-    if (local.length > 0) return local
-    throw err
   }
+  
+  return local
 }
 
 export type ListSurveysPaginatedParams = import('@/lib/supabase/surveys').ListSurveysPaginatedParams
@@ -46,18 +51,21 @@ export type ListSurveysPaginatedParams = import('@/lib/supabase/surveys').ListSu
 export async function listSurveysPaginated(
   params: ListSurveysPaginatedParams
 ): Promise<{ items: Survey[]; total: number }> {
-  assertSupabaseConfigured()
-  try {
-    const result = await supabase.listSurveysFromSupabasePaginated(params)
-    if (typeof window !== 'undefined') {
-      await offlineDB.putMany('surveys', result.items)
-    }
-    return result
-  } catch (err) {
-    const local = await listSurveysLocallyPaginated(params)
-    if (local) return local
-    throw err
+  const local = await listSurveysLocallyPaginated(params)
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    return supabase.listSurveysFromSupabasePaginated(params)
+      .then(async (result) => {
+        await offlineDB.putMany('surveys', result.items, { silent: true })
+        return result
+      })
+      .catch((err) => {
+        console.warn('Background sync listSurveysPaginated failed:', err)
+        return local || { items: [], total: 0 }
+      })
   }
+
+  return local || { items: [], total: 0 }
 }
 
 export async function listSurveysLocallyPaginated(
@@ -148,28 +156,57 @@ function filterSurveysLocally(
 
 /** Unscoped checks for unique service no / Aadhar across all rows (used by survey forms). */
 export async function isSurveyServiceNoTaken(serviceNo: string, excludeSurveyId?: string): Promise<boolean> {
-  assertSupabaseConfigured()
-  return supabase.isServiceNoTakenGlobally(serviceNo, excludeSurveyId)
+  const local = typeof window !== 'undefined' ? await offlineDB.getAll('surveys') : []
+  const match = local.find(s => s.id !== excludeSurveyId && s.serviceNo === serviceNo)
+  if (match) return true
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      return await supabase.isServiceNoTakenGlobally(serviceNo, excludeSurveyId)
+    } catch {
+      return false
+    }
+  }
+  return false
 }
 
 export async function isSurveyAadharTaken(aadhar: string, excludeSurveyId?: string): Promise<boolean> {
-  assertSupabaseConfigured()
-  return supabase.isAadharTakenGlobally(aadhar, excludeSurveyId)
+  const local = typeof window !== 'undefined' ? await offlineDB.getAll('surveys') : []
+  const match = local.find(s => s.id !== excludeSurveyId && s.aadharNo === aadhar)
+  if (match) return true
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      return await supabase.isAadharTakenGlobally(aadhar, excludeSurveyId)
+    } catch {
+      return false
+    }
+  }
+  return false
 }
 
 export async function getSurveyById(id: string): Promise<Survey | undefined> {
-  assertSupabaseConfigured()
-  try {
-    const one = await supabase.getSurveyByIdFromSupabase(id)
-    if (one && typeof window !== 'undefined') {
-      await offlineDB.putOne('surveys', one)
+  const local = typeof window !== 'undefined' ? await offlineDB.getOne('surveys', id) : undefined
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    const fetchPromise = supabase.getSurveyByIdFromSupabase(id)
+      .then(async (one) => {
+        if (one) {
+          await offlineDB.putOne('surveys', one)
+        }
+        return one
+      })
+      .catch((err) => {
+        console.warn('Background sync getSurveyById failed:', err)
+        return local
+      })
+
+    if (!local) {
+      return fetchPromise
     }
-    return one
-  } catch (err) {
-    const local = await offlineDB.getOne('surveys', id)
-    if (local) return local as Survey
-    throw err
   }
+
+  return local
 }
 
 export async function createSurvey(
@@ -179,30 +216,51 @@ export async function createSurvey(
   submittedById?: string,
   uploadFiles?: Partial<Record<SurveyUploadKeys, File>>
 ): Promise<Survey> {
-  assertSupabaseConfigured()
-  const formData = new FormData()
-  for (const k of SURVEY_UPLOAD_KEYS_ORDER) {
-    const f = uploadFiles?.[k]
-    if (f) formData.set(`file_${k}`, f, f.name)
+  const id = crypto.randomUUID()
+  const localSurvey: Survey = {
+    id,
+    projectId: input.projectId ?? ACTIVE_PROJECT_ID,
+    beneficiaryName: input.beneficiaryName,
+    serviceNo: input.serviceNo,
+    aadharNo: input.aadharNo,
+    mobile: input.mobile ?? undefined,
+    panNo: (input.panNo ?? '').toString().toUpperCase(),
+    contractedLoad: input.contractedLoad ?? undefined,
+    status: 'pending',
+    uploads: uploads || {},
+    siteDetails: siteDetails || {},
+    siteLocation: input.siteLocation,
+    bankDetails: input.bankDetails,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    _syncStatus: 'pending-create',
+  } as any
+
+  // Save files locally in case offline
+  if (uploadFiles) {
+    for (const [key, file] of Object.entries(uploadFiles)) {
+      if (file) {
+        await offlineDB.saveOfflineFile(`${id}_${key}`, file, file.name, file.type)
+      }
+    }
   }
-  formData.set('input', JSON.stringify(input))
-  formData.set('siteDetails', JSON.stringify(siteDetails ?? {}))
-  formData.set('meta', JSON.stringify(uploads ?? {}))
-  if (submittedById) formData.set('submittedById', submittedById)
-  const res = await fetchWithTimeout(
-    '/api/surveys/create',
-    {
-      method: 'POST',
-      headers: await buildAuthHeaders(true),
-      body: formData,
-    },
-    SURVEY_UPLOAD_TIMEOUT_MS,
-  )
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not create survey')
+
+  await offlineDB.putOne('surveys', localSurvey)
+
+  // Queue mutation
+  await offlineDB.addMutation({
+    storeName: 'surveys',
+    action: 'CREATE',
+    entityId: id,
+    payload: { input, uploads, siteDetails, submittedById }
+  })
+
+  // Trigger sync in background if online
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    processSyncQueue()
   }
-  return json.survey as Survey
+
+  return localSurvey
 }
 
 export async function updateSurvey(
@@ -213,84 +271,131 @@ export async function updateSurvey(
   submittedById?: string,
   uploadFiles?: Partial<Record<SurveyUploadKeys, File>>
 ): Promise<Survey> {
-  assertSupabaseConfigured()
-  const formData = new FormData()
-  for (const k of SURVEY_UPLOAD_KEYS_ORDER) {
-    const f = uploadFiles?.[k]
-    if (f) formData.set(`file_${k}`, f, f.name)
+  const existing = await offlineDB.getOne('surveys', id)
+  const localSurvey: Survey = {
+    ...existing,
+    beneficiaryName: input.beneficiaryName,
+    serviceNo: input.serviceNo,
+    aadharNo: input.aadharNo,
+    mobile: input.mobile ?? undefined,
+    panNo: (input.panNo ?? '').toString().toUpperCase(),
+    contractedLoad: input.contractedLoad ?? undefined,
+    uploads: { ...(existing?.uploads || {}), ...uploads },
+    siteDetails: siteDetails || {},
+    siteLocation: input.siteLocation,
+    bankDetails: input.bankDetails,
+    updatedAt: new Date().toISOString(),
+    _syncStatus: existing?._syncStatus === 'pending-create' ? 'pending-create' : 'pending-update',
+  } as any
+
+  // Save files locally in case offline
+  if (uploadFiles) {
+    for (const [key, file] of Object.entries(uploadFiles)) {
+      if (file) {
+        await offlineDB.saveOfflineFile(`${id}_${key}`, file, file.name, file.type)
+      }
+    }
   }
-  formData.set('id', id)
-  formData.set('input', JSON.stringify(input))
-  formData.set('siteDetails', JSON.stringify(siteDetails ?? {}))
-  formData.set('meta', JSON.stringify(uploads ?? {}))
-  if (submittedById) formData.set('submittedById', submittedById)
-  const res = await fetchWithTimeout(
-    '/api/surveys/update',
-    {
-      method: 'POST',
-      headers: await buildAuthHeaders(true),
-      body: formData,
-    },
-    SURVEY_UPLOAD_TIMEOUT_MS,
-  )
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not update survey')
+
+  await offlineDB.putOne('surveys', localSurvey)
+
+  // Queue mutation
+  await offlineDB.addMutation({
+    storeName: 'surveys',
+    action: 'UPDATE',
+    entityId: id,
+    payload: { input, uploads, siteDetails, submittedById }
+  })
+
+  // Trigger sync in background if online
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    processSyncQueue()
   }
-  return json.survey as Survey
+
+  return localSurvey
 }
 
 export async function updateSurveyStatus(id: string, status: Survey['status']): Promise<Survey> {
-  assertSupabaseConfigured()
-  const res = await fetchWithTimeout(
-    '/api/surveys/status',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(await buildAuthHeaders(true)),
-      },
-      body: JSON.stringify({ surveyId: id, status }),
-    },
-    SURVEY_LIGHT_TIMEOUT_MS,
-  )
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not update survey status')
+  const existing = await offlineDB.getOne('surveys', id)
+  const localSurvey: Survey = {
+    ...existing,
+    status,
+    _syncStatus: existing?._syncStatus === 'pending-create' ? 'pending-create' : 'pending-update',
+  } as any
+
+  await offlineDB.putOne('surveys', localSurvey)
+
+  await offlineDB.addMutation({
+    storeName: 'surveys',
+    action: 'STATUS',
+    entityId: id,
+    payload: { status }
+  })
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    processSyncQueue()
   }
-  return json.survey as Survey
+
+  return localSurvey
 }
 
 export async function assignSurveyInstaller(id: string, installerId?: string): Promise<Survey> {
-  assertSupabaseConfigured()
-  const res = await fetchWithTimeout(
-    '/api/surveys/installer',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(await buildAuthHeaders(true)),
-      },
-      body: JSON.stringify({ surveyId: id, installerId: installerId ?? null }),
-    },
-    SURVEY_LIGHT_TIMEOUT_MS,
-  )
-  const json = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    throw new Error(typeof json?.error === 'string' ? json.error : 'Could not assign installer')
+  const existing = await offlineDB.getOne('surveys', id)
+  const localSurvey: Survey = {
+    ...existing,
+    installerId: installerId ?? null,
+    _syncStatus: existing?._syncStatus === 'pending-create' ? 'pending-create' : 'pending-update',
+  } as any
+
+  await offlineDB.putOne('surveys', localSurvey)
+
+  await offlineDB.addMutation({
+    storeName: 'surveys',
+    action: 'INSTALLER',
+    entityId: id,
+    payload: { installerId }
+  })
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    processSyncQueue()
   }
-  return json.survey as Survey
+
+  return localSurvey
 }
 
 export async function appendSurveyActivity(
   id: string,
   event: Omit<SurveyActivityEvent, 'at'> & { at?: string }
 ): Promise<Survey> {
-  assertSupabaseConfigured()
-  return supabase.appendSurveyActivityInSupabase(id, event)
+  const existing = await offlineDB.getOne('surveys', id)
+  const activity = [...(existing?.activity || []), { ...event, at: event.at || new Date().toISOString() }]
+  const localSurvey: Survey = {
+    ...existing,
+    activity,
+  } as any
+
+  await offlineDB.putOne('surveys', localSurvey)
+  
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    try {
+      await supabase.appendSurveyActivityInSupabase(id, event)
+    } catch {}
+  }
+
+  return localSurvey
 }
 
 export async function deleteSurvey(id: string): Promise<void> {
-  assertSupabaseConfigured()
-  return supabase.deleteSurveyFromSupabase(id)
+  await offlineDB.deleteOne('surveys', id)
+
+  await offlineDB.addMutation({
+    storeName: 'surveys',
+    action: 'DELETE',
+    entityId: id,
+    payload: {}
+  })
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    processSyncQueue()
+  }
 }

@@ -254,6 +254,7 @@ export const CreateSurveySchema = z.object({
     })
     .optional()
     .default({}),
+  remarks: z.string().optional(),
 })
 
 export type CreateSurveyInput = z.infer<typeof CreateSurveySchema>

@@ -308,7 +308,7 @@ export default function DashboardPage() {
                       <p className="text-sm text-muted-foreground py-4">No surveys yet.</p>
                     ) : (
                       recentSurveys.map((survey) => (
-                        <Link key={survey.id} href={`/surveys/${survey.id}`}>
+                        <Link key={survey.id} href={`/survey-details?id=${survey.id}`}>
                           <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50">
                             <div className="rounded-lg bg-gradient-green-light p-2">
                               <ClipboardCheck className="h-5 w-5 text-white" />
@@ -360,7 +360,7 @@ export default function DashboardPage() {
                       <p className="text-sm text-muted-foreground py-4">No installations yet.</p>
                     ) : (
                       displayInstallations.map((installation: Installation) => (
-                        <Link key={installation.id} href={`/installations/${installation.id}`}>
+                        <Link key={installation.id} href={`/installation-details?id=${installation.id}`}>
                           <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50">
                             <div className="rounded-lg bg-gradient-green-light p-2">
                               <Wrench className="h-5 w-6 text-white" />
@@ -413,7 +413,7 @@ export default function DashboardPage() {
                     <p className="text-sm text-muted-foreground py-4">No pending inspections.</p>
                   ) : (
                     pendingInspections.map((inspection: Inspection) => (
-                      <Link key={inspection.id} href={`/inspections/${inspection.id}`}>
+                      <Link key={inspection.id} href={`/inspection-details?id=${inspection.id}`}>
                         <div className="flex items-start gap-4 rounded-lg border border-border p-4 transition-colors hover:bg-muted/50">
                           <div className="rounded-lg bg-gradient-green-light p-2">
                             <CheckCircle className="h-5 w-6 text-white" />

@@ -5,6 +5,8 @@ import { assertSupabaseConfigured, isSupabaseConfigured } from '@/lib/supabase/c
 import { waitForSessionReady } from '@/lib/supabase/auth'
 import * as supabase from '@/lib/supabase/installations'
 import { buildAuthHeaders, refreshSupabaseSession } from '@/lib/data/auth-headers'
+import { processSyncQueue } from './sync'
+import { ACTIVE_PROJECT_ID } from './active-project'
 import type {
   Installation,
   CreateInstallationInput,
@@ -223,7 +225,7 @@ export async function listInstallationsPaginated(
     }
     const items = (json.items ?? []) as InstallationListItem[]
     if (items.length > 0 && typeof window !== 'undefined') {
-      await offlineDB.putMany('installations', items)
+      await offlineDB.putMany('installations', items, { silent: true })
     }
 
     const kpiRaw = json.kpi as Record<string, unknown> | undefined
@@ -363,7 +365,11 @@ export async function getInstallationsExactTotal(
     return typeof json.total === 'number' ? json.total : 0
   } catch (err) {
     const allLocal = await offlineDB.getAll('installations')
-    const { total } = filterInstallationsLocally(allLocal, params)
+    const { total } = filterInstallationsLocally(allLocal, {
+      ...params,
+      limit: 100000,
+      offset: 0,
+    })
     return total
   }
 }
@@ -392,68 +398,129 @@ export async function getInstallationsKpi(): Promise<InstallationsKpi> {
 }
 
 export async function listInstallations(): Promise<Installation[]> {
-  assertSupabaseConfigured()
-  try {
-    const list = await supabase.listInstallationsFromSupabase()
-    if (typeof window !== 'undefined') {
-      await offlineDB.putMany('installations', list)
+  const local = typeof window !== 'undefined' ? await offlineDB.getAll('installations') : []
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    const fetchPromise = supabase.listInstallationsFromSupabase()
+      .then(async (list) => {
+        await offlineDB.putMany('installations', list, { silent: true })
+        return list
+      })
+      .catch((err) => {
+        console.warn('Background sync listInstallations failed:', err)
+        return local
+      })
+
+    if (local.length === 0) {
+      return fetchPromise
     }
-    return list
-  } catch (err) {
-    const local = await offlineDB.getAll('installations')
-    if (local.length > 0) return local
-    throw err
   }
+
+  return local
 }
 
 export async function getInstallationById(id: string): Promise<Installation | undefined> {
-  assertSupabaseConfigured()
-  try {
-    const one = await supabase.getInstallationByIdFromSupabase(id)
-    if (one && typeof window !== 'undefined') {
-      await offlineDB.putOne('installations', one)
+  const local = typeof window !== 'undefined' ? await offlineDB.getOne('installations', id) : undefined
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    const fetchPromise = supabase.getInstallationByIdFromSupabase(id)
+      .then(async (one) => {
+        if (one) {
+          await offlineDB.putOne('installations', one)
+        }
+        return one
+      })
+      .catch((err) => {
+        console.warn('Background sync getInstallationById failed:', err)
+        return local
+      })
+
+    if (!local) {
+      return fetchPromise
     }
-    return one
-  } catch (err) {
-    const local = await offlineDB.getOne('installations', id)
-    if (local) return local as Installation
-    throw err
   }
+
+  return local
 }
 
 export async function getInstallationBySurveyId(surveyId: string): Promise<Installation | undefined> {
-  assertSupabaseConfigured()
-  return supabase.getInstallationBySurveyIdFromSupabase(surveyId)
+  const local = typeof window !== 'undefined' ? (await offlineDB.getAll('installations')).find(i => i.surveyId === surveyId) : undefined
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    const fetchPromise = supabase.getInstallationBySurveyIdFromSupabase(surveyId)
+      .then(async (one) => {
+        if (one) {
+          await offlineDB.putOne('installations', one)
+        }
+        return one
+      })
+      .catch((err) => {
+        console.warn('Background sync getInstallationBySurveyId failed:', err)
+        return local
+      })
+
+    if (!local) {
+      return fetchPromise
+    }
+  }
+
+  return local
 }
 
 export async function createInstallation(
   input: CreateInstallationInput,
   payload: { materials: Material[]; photos: InstallationPhotoMeta[] },
   photoFiles?: Record<string, File>,
-  /** Keys must match server: `file_mat_<id>_photo`, `file_mat_<id>_panel_<index>` */
   materialPhotoFiles?: Record<string, File>,
   signatureFile?: Blob | File | null
 ): Promise<Installation> {
-  assertSupabaseConfigured()
-  const hasSignature = !!signatureFile && signatureFile.size > 0
-  const formData = new FormData()
-  formData.set('input', JSON.stringify(input))
-  formData.set('payload', JSON.stringify(payload))
-  for (const [pid, file] of Object.entries(photoFiles ?? {})) {
-    formData.set(`file_${pid}`, file)
+  const id = crypto.randomUUID()
+  const localInstallation: Installation = {
+    id,
+    surveyId: input.surveyId,
+    projectId: ACTIVE_PROJECT_ID,
+    status: 'pending',
+    materials: payload.materials,
+    photos: payload.photos,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    _syncStatus: 'pending-create',
+  } as any
+
+  // Save files locally
+  if (photoFiles) {
+    for (const [pid, file] of Object.entries(photoFiles)) {
+      if (file) {
+        await offlineDB.saveOfflineFile(`${id}_photo_${pid}`, file, file.name, file.type)
+      }
+    }
   }
-  for (const [key, file] of Object.entries(materialPhotoFiles ?? {})) {
-    formData.set(key, file)
+  if (materialPhotoFiles) {
+    for (const [key, file] of Object.entries(materialPhotoFiles)) {
+      if (file) {
+        const matId = key.replace('file_mat_', '').replace('_photo', '')
+        await offlineDB.saveOfflineFile(`${id}_mat_${matId}`, file, file.name, file.type)
+      }
+    }
   }
-  if (hasSignature && signatureFile) {
-    formData.set('file_signature', signatureFile)
+  if (signatureFile && signatureFile.size > 0) {
+    await offlineDB.saveOfflineFile(`${id}_signature`, signatureFile, 'signature.png', signatureFile.type || 'image/png')
   }
-  const json = await postInstallationFormData(
-    '/api/installations/create',
-    formData,
-    'Could not save installation. Please try again.'
-  )
-  return json.installation as Installation
+
+  await offlineDB.putOne('installations', localInstallation)
+
+  await offlineDB.addMutation({
+    storeName: 'installations',
+    action: 'CREATE',
+    entityId: id,
+    payload: { input, payload }
+  })
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    processSyncQueue()
+  }
+
+  return localInstallation
 }
 
 export async function updateInstallation(
@@ -464,30 +531,71 @@ export async function updateInstallation(
   materialPhotoFiles?: Record<string, File>,
   signatureFile?: Blob | File | null
 ): Promise<Installation> {
-  assertSupabaseConfigured()
-  const hasSignature = !!signatureFile && signatureFile.size > 0
-  const formData = new FormData()
-  formData.set('installationId', id)
-  formData.set('input', JSON.stringify(input))
-  formData.set('payload', JSON.stringify(payload))
-  for (const [pid, file] of Object.entries(photoFiles ?? {})) {
-    formData.set(`file_${pid}`, file)
+  const existing = await offlineDB.getOne('installations', id)
+  const localInstallation: Installation = {
+    ...existing,
+    materials: payload.materials,
+    photos: payload.photos,
+    updatedAt: new Date().toISOString(),
+    _syncStatus: existing?._syncStatus === 'pending-create' ? 'pending-create' : 'pending-update',
+  } as any
+
+  // Save files locally
+  if (photoFiles) {
+    for (const [pid, file] of Object.entries(photoFiles)) {
+      if (file) {
+        await offlineDB.saveOfflineFile(`${id}_photo_${pid}`, file, file.name, file.type)
+      }
+    }
   }
-  for (const [key, file] of Object.entries(materialPhotoFiles ?? {})) {
-    formData.set(key, file)
+  if (materialPhotoFiles) {
+    for (const [key, file] of Object.entries(materialPhotoFiles)) {
+      if (file) {
+        const matId = key.replace('file_mat_', '').replace('_photo', '')
+        await offlineDB.saveOfflineFile(`${id}_mat_${matId}`, file, file.name, file.type)
+      }
+    }
   }
-  if (hasSignature && signatureFile) {
-    formData.set('file_signature', signatureFile)
+  if (signatureFile && signatureFile.size > 0) {
+    await offlineDB.saveOfflineFile(`${id}_signature`, signatureFile, 'signature.png', signatureFile.type || 'image/png')
   }
-  const json = await postInstallationFormData(
-    '/api/installations/update',
-    formData,
-    'Could not update installation. Please try again.'
-  )
-  return json.installation as Installation
+
+  await offlineDB.putOne('installations', localInstallation)
+
+  await offlineDB.addMutation({
+    storeName: 'installations',
+    action: 'UPDATE',
+    entityId: id,
+    payload: { input, payload }
+  })
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    processSyncQueue()
+  }
+
+  return localInstallation
 }
 
 export async function updateInstallationStatus(id: string, status: Installation['status']): Promise<Installation> {
-  assertSupabaseConfigured()
-  return supabase.updateInstallationStatusInSupabase(id, status)
+  const existing = await offlineDB.getOne('installations', id)
+  const localInstallation: Installation = {
+    ...existing,
+    status,
+    _syncStatus: existing?._syncStatus === 'pending-create' ? 'pending-create' : 'pending-update',
+  } as any
+
+  await offlineDB.putOne('installations', localInstallation)
+
+  await offlineDB.addMutation({
+    storeName: 'installations',
+    action: 'STATUS',
+    entityId: id,
+    payload: { status }
+  })
+
+  if (typeof window !== 'undefined' && navigator.onLine) {
+    processSyncQueue()
+  }
+
+  return localInstallation
 }

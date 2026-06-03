@@ -6,8 +6,26 @@
 
 export class OfflineDB {
   private dbName = 'SolarEPCOfflineDB'
-  private version = 2
+  private version = 3
   private db: IDBDatabase | null = null
+  private listeners = new Set<() => void>()
+
+  subscribe(listener: () => void) {
+    this.listeners.add(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  notify() {
+    this.listeners.forEach((l) => {
+      try {
+        l()
+      } catch (e) {
+        console.error('Error notifying listener:', e)
+      }
+    })
+  }
 
   private getDB(): Promise<IDBDatabase> {
     if (typeof window === 'undefined') {
@@ -29,6 +47,12 @@ export class OfflineDB {
             db.createObjectStore(store, { keyPath: 'id' })
           }
         })
+        if (!db.objectStoreNames.contains('sync_queue')) {
+          db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true })
+        }
+        if (!db.objectStoreNames.contains('offline_files')) {
+          db.createObjectStore('offline_files', { keyPath: 'id' })
+        }
       }
 
       request.onsuccess = () => {
@@ -61,7 +85,7 @@ export class OfflineDB {
     })
   }
 
-  async putMany(storeName: string, items: any[]): Promise<void> {
+  async putMany(storeName: string, items: any[], options?: { silent?: boolean }): Promise<void> {
     if (typeof window === 'undefined') return
     const db = await this.getDB()
     return new Promise((resolve, reject) => {
@@ -72,7 +96,12 @@ export class OfflineDB {
           store.put(item)
         }
       })
-      tx.oncomplete = () => resolve()
+      tx.oncomplete = () => {
+        if (!options?.silent) {
+          this.notify()
+        }
+        resolve()
+      }
       tx.onerror = () => reject(tx.error)
     })
   }
@@ -93,9 +122,26 @@ export class OfflineDB {
     }
   }
 
-  async putOne(storeName: string, item: any): Promise<void> {
+  async putOne(storeName: string, item: any, options?: { silent?: boolean }): Promise<void> {
     if (!item || !item.id) return
-    await this.putMany(storeName, [item])
+    await this.putMany(storeName, [item], options)
+  }
+
+  async deleteOne(storeName: string, id: string, options?: { silent?: boolean }): Promise<void> {
+    if (typeof window === 'undefined') return
+    const db = await this.getDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite')
+      const store = tx.objectStore(storeName)
+      const request = store.delete(id)
+      request.onsuccess = () => {
+        if (!options?.silent) {
+          this.notify()
+        }
+        resolve()
+      }
+      request.onerror = () => reject(request.error)
+    })
   }
 
   async getOne(storeName: string, id: string): Promise<any | undefined> {
@@ -112,6 +158,102 @@ export class OfflineDB {
     } catch {
       return undefined
     }
+  }
+
+  // --- Sync Queue Helper Methods ---
+  async addMutation(mutation: {
+    storeName: string
+    action: string
+    entityId: string
+    payload: any
+  }): Promise<number> {
+    if (typeof window === 'undefined') return 0
+    const db = await this.getDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('sync_queue', 'readwrite')
+      const store = tx.objectStore('sync_queue')
+      const request = store.add({
+        ...mutation,
+        timestamp: Date.now()
+      })
+      request.onsuccess = () => {
+        this.notify()
+        resolve(request.result as number)
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getPendingMutations(): Promise<any[]> {
+    if (typeof window === 'undefined') return []
+    try {
+      const db = await this.getDB()
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('sync_queue', 'readonly')
+        const store = tx.objectStore('sync_queue')
+        const request = store.getAll()
+        request.onsuccess = () => resolve(request.result || [])
+        request.onerror = () => reject(request.error)
+      })
+    } catch {
+      return []
+    }
+  }
+
+  async removeMutation(id: number): Promise<void> {
+    if (typeof window === 'undefined') return
+    const db = await this.getDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('sync_queue', 'readwrite')
+      const store = tx.objectStore('sync_queue')
+      const request = store.delete(id)
+      request.onsuccess = () => {
+        this.notify()
+        resolve()
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  // --- Offline Files Helper Methods ---
+  async saveOfflineFile(id: string, file: Blob | File, name: string, type: string): Promise<void> {
+    if (typeof window === 'undefined') return
+    const db = await this.getDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('offline_files', 'readwrite')
+      const store = tx.objectStore('offline_files')
+      const request = store.put({ id, file, name, type })
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getOfflineFile(id: string): Promise<{ file: Blob | File; name: string; type: string } | undefined> {
+    if (typeof window === 'undefined') return undefined
+    try {
+      const db = await this.getDB()
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('offline_files', 'readonly')
+        const store = tx.objectStore('offline_files')
+        const request = store.get(id)
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+    } catch {
+      return undefined
+    }
+  }
+
+  async removeOfflineFile(id: string): Promise<void> {
+    if (typeof window === 'undefined') return
+    const db = await this.getDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('offline_files', 'readwrite')
+      const store = tx.objectStore('offline_files')
+      const request = store.delete(id)
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
   }
 }
 

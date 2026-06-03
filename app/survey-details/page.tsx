@@ -400,10 +400,10 @@ function SurveyDetailContent() {
   }
 
   const handleAssignInstaller = async (installerIdValue: string) => {
-    if (!params?.id) return
+    if (!id) return
     const nextId = installerIdValue === "__none__" ? undefined : installerIdValue
     try {
-      await surveysData.assignSurveyInstaller(params.id, nextId)
+      await surveysData.assignSurveyInstaller(id, nextId)
       setInstallerId(installerIdValue)
       await refetch()
       toast({ title: "Installer assigned" })
@@ -420,7 +420,7 @@ function SurveyDetailContent() {
     }
     if (linkedInstallation) {
       toast({ title: "Installation already exists", description: `Opening ${linkedInstallation.id}` })
-      router.push(`/installations/${linkedInstallation.id}`)
+      router.push(`/installation-details?id=${linkedInstallation.id}`)
       return
     }
     const engineer = getUserById(survey.installerId)
@@ -449,7 +449,7 @@ function SurveyDetailContent() {
       await refetch()
       await refetchLinkedInstallation()
       toast({ title: "Installation created", description: created.id })
-      router.push(`/installations/${created.id}`)
+      router.push(`/installation-details?id=${created.id}`)
     } catch (e) {
       toast({
         title: "Could not create installation",
@@ -1047,7 +1047,7 @@ function SurveyDetailContent() {
                       type="button"
                       variant="outline"
                       disabled={!linkedInstallation}
-                      onClick={() => linkedInstallation && router.push(`/installations/${linkedInstallation.id}`)}
+                      onClick={() => linkedInstallation && router.push(`/installation-details?id=${linkedInstallation.id}`)}
                     >
                       Open
                     </Button>
@@ -1062,7 +1062,7 @@ function SurveyDetailContent() {
                       type="button"
                       variant="outline"
                       disabled={!linkedInspection}
-                      onClick={() => linkedInspection && router.push(`/inspections/${linkedInspection.id}`)}
+                      onClick={() => linkedInspection && router.push(`/inspection-details?id=${linkedInspection.id}`)}
                     >
                       Open
                     </Button>

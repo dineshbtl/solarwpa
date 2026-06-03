@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, Suspense } from "react"
 import { createPortal } from "react-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SolarWatermark } from "@/components/solar-watermark"
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { ArrowLeft, Package, CheckCircle, Play, Send, Pencil, Camera, MapPin, Undo2 } from "lucide-react"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { toast } from "@/hooks/use-toast"
 import { useInstallation, useSurvey, useInspectionByInstallationId, useUsers } from "@/lib/data/hooks"
 import * as installationsData from "@/lib/data/installations"
@@ -103,10 +103,10 @@ function ImageLightbox({
   )
 }
 
-export default function InstallationDetailPage() {
+function InstallationDetailContent() {
   const router = useRouter()
-  const params = useParams<{ id: string }>()
-  const id = params?.id ?? null
+  const searchParams = useSearchParams()
+  const id = searchParams?.get("id") ?? null
 
   const { data: installation, loading, error, refetch } = useInstallation(id)
 
@@ -340,7 +340,7 @@ export default function InstallationDetailPage() {
                   >
                     {installation.status.replace("_", " ")}
                   </span>
-                  <Link href={`/installations/${installation.id}/edit`}>
+                  <Link href={`/installation-edit?id=${installation.id}`}>
                     <Button type="button" variant="outline" size="sm" className="border-solar bg-transparent">
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
@@ -872,5 +872,13 @@ export default function InstallationDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+export default function InstallationDetailPage() {
+  return (
+    <Suspense fallback={<InstallationDetailPageSkeleton showWatermark />}>
+      <InstallationDetailContent />
+    </Suspense>
   )
 }

@@ -246,7 +246,7 @@ async function uploadSurveyFileServer(
   return data.publicUrl
 }
 
-function isNonEmptyBinaryPart(value: FormDataEntryValue | null): value is Blob {
+function isNonEmptyBinaryPart(value: FormDataEntryValue | null): value is File {
   if (value == null || typeof value === 'string') return false
   const b = value as Blob
   return typeof b.size === 'number' && b.size > 0

@@ -17,7 +17,7 @@ export async function listUsers(): Promise<User[]> {
   try {
     const list = await supabase.listUsersFromSupabase()
     if (typeof window !== 'undefined') {
-      await offlineDB.putMany('users', list)
+      await offlineDB.putMany('users', list, { silent: true })
     }
     return list
   } catch (err) {
